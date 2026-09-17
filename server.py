@@ -16,7 +16,6 @@ app.add_middleware(
 
 # الاتصال بمحاكي LDPlayer
 d = u2.connect()
-d.set_fastinput_ime(True)
 
 
 class Pilgrim(BaseModel):
