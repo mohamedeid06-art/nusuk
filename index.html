@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>لوحة التحكم | أوتوميشن نسك</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-8">
+  <div class="max-w-5xl mx-auto space-y-6">
+    
+    <!-- العنوان -->
+    <header class="flex justify-between items-center border-b border-slate-700 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-emerald-400">🕋 لوحة التحكم في أوتوميشن نسك</h1>
+        <p class="text-slate-400 text-sm">ارفع شيت المعتمرين وتابع عمليات التسجيل على المحاكي مباشرة</p>
+      </div>
+      <div id="connectionBadge" class="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold">
+        جاهز للاتصال
+      </div>
+    </header>
+
+    <!-- منطقة رفع الملف -->
+    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md">
+      <label class="block text-sm font-medium text-slate-300 mb-2">اختر ملف إكسيل المعتمرين (.xlsx)</label>
+      <div class="flex items-center gap-4">
+        <input type="file" id="excelFile" accept=".xlsx, .xls" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer"/>
+        <button id="startBtn" onclick="startAutomation()" class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-6 py-2 rounded-lg transition" disabled>
+          بدء التسجيل
+        </button>
+      </div>
+    </div>
+
+    <!-- جدول المعتمرين -->
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <table class="w-full text-right text-sm">
+        <thead class="bg-slate-700/50 text-slate-300 text-xs">
+          <tr>
+            <th class="p-3">#</th>
+            <th class="p-3">الاسم</th>
+            <th class="p-3">رقم الجواز</th>
+            <th class="p-3">رقم التأشيرة</th>
+            <th class="p-3">البريد الإلكتروني</th>
+            <th class="p-3">الحالة</th>
+          </tr>
+        </thead>
+        <tbody id="pilgrimsTable" class="divide-y divide-slate-700/50 text-slate-200">
+          <tr>
+            <td colspan="6" class="text-center p-4 text-slate-500">لم يتم رفع ملف بعد</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    let pilgrimsData = [];
+
+    // قراءة ملف الإكسيل فور اختياره
+    document.getElementById('excelFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        
+        pilgrimsData = json;
+        renderTable(json);
+        document.getElementById('startBtn').disabled = false;
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    function renderTable(data) {
+      const tbody = document.getElementById('pilgrimsTable');
+      tbody.innerHTML = '';
+      data.forEach((row, i) => {
+        tbody.innerHTML += `
+          <tr id="row-${i}">
+            <td class="p-3">${i + 1}</td>
+            <td class="p-3 font-medium">${row['الاسم'] || row['Name'] || '-'}</td>
+            <td class="p-3">${row['رقم الجواز'] || row['Passport'] || '-'}</td>
+            <td class="p-3">${row['رقم التأشيرة'] || row['Visa'] || '-'}</td>
+            <td class="p-3">${row['البريد الإلكتروني'] || row['Email'] || '-'}</td>
+            <td class="p-3"><span id="status-${i}" class="bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs">قيد الانتظار</span></td>
+          </tr>
+        `;
+      });
+    }
+
+    async function startAutomation() {
+      document.getElementById('startBtn').disabled = true;
+      for (let i = 0; i < pilgrimsData.length; i++) {
+        const statusEl = document.getElementById(`status-${i}`);
+        statusEl.className = "bg-yellow-500/20 text-yellow-400 px-2.5 py-1 rounded text-xs animate-pulse";
+        statusEl.innerText = "جاري التسجيل...";
+
+        try {
+          const res = await fetch('http://localhost:8000/api/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(pilgrimsData[i])
+          });
+          const result = await res.json();
+          
+          if(result.success) {
+            statusEl.className = "bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded text-xs";
+            statusEl.innerText = "تم بنجاح";
+          } else {
+            statusEl.className = "bg-rose-500/20 text-rose-400 px-2.5 py-1 rounded text-xs";
+            statusEl.innerText = "فشل";
+          }
+        } catch (err) {
+          statusEl.className = "bg-rose-500/20 text-rose-400 px-2.5 py-1 rounded text-xs";
+          statusEl.innerText = "خطأ اتصال";
+        }
+      }
+      document.getElementById('startBtn').disabled = false;
+    }
+  </script>
+</body>
+</html>
