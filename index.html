@@ -2,124 +2,294 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>لوحة التحكم | أوتوميشن نسك</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بوابة تسجيل المعتمرين | أوتوميشن نسك</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+    body { font-family: 'Tajawal', sans-serif; }
+  </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen p-8">
-  <div class="max-w-5xl mx-auto space-y-6">
-    
-    <!-- العنوان -->
-    <header class="flex justify-between items-center border-b border-slate-700 pb-4">
-      <div>
-        <h1 class="text-2xl font-bold text-emerald-400">🕋 لوحة التحكم في أوتوميشن نسك</h1>
-        <p class="text-slate-400 text-sm">ارفع شيت المعتمرين وتابع عمليات التسجيل على المحاكي مباشرة</p>
-      </div>
-      <div id="connectionBadge" class="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-semibold">
-        جاهز للاتصال
-      </div>
-    </header>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
 
-    <!-- منطقة رفع الملف -->
-    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md">
-      <label class="block text-sm font-medium text-slate-300 mb-2">اختر ملف إكسيل المعتمرين (.xlsx)</label>
-      <div class="flex items-center gap-4">
-        <input type="file" id="excelFile" accept=".xlsx, .xls" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer"/>
-        <button id="startBtn" onclick="startAutomation()" class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-6 py-2 rounded-lg transition" disabled>
-          بدء التسجيل
+  <!-- شريط التنقل العلوي -->
+  <nav class="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl shadow-inner">
+          <i class="fa-solid fa-kaaba"></i>
+        </div>
+        <div>
+          <span class="font-bold text-lg text-white">منصة نسك برو</span>
+          <span class="text-xs text-slate-400 block -mt-1">نظام إدارة التسجيل الآلي المتعدد</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="engineStatus" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-300">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+          <span>المحرك المحلي: بانتظار الاتصال</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+
+    <!-- البطاقات التوجيهية والإحصائيات -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
+        <span class="text-slate-400 text-xs font-semibold block mb-1">إجمالي المعتمرين</span>
+        <div class="text-3xl font-extrabold text-white" id="statTotal">0</div>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
+        <span class="text-slate-400 text-xs font-semibold block mb-1">تم بنجاح</span>
+        <div class="text-3xl font-extrabold text-emerald-400" id="statSuccess">0</div>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
+        <span class="text-slate-400 text-xs font-semibold block mb-1">فشل / متوقف</span>
+        <div class="text-3xl font-extrabold text-rose-400" id="statFailed">0</div>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl">
+        <span class="text-slate-400 text-xs font-semibold block mb-1">نسبة الإنجاز</span>
+        <div class="text-3xl font-extrabold text-indigo-400" id="statProgress">0%</div>
+      </div>
+    </div>
+
+    <!-- شبكة الإعدادات والرفع -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- 1. إعدادات العميل (تخصيص الإيميل والمفتاح لكل عميل) -->
+      <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+        <div class="flex items-center gap-2 border-b border-slate-800 pb-3">
+          <i class="fa-solid fa-user-gear text-emerald-400"></i>
+          <h2 class="font-bold text-base">بيانات العميل وخادم البريد</h2>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">اسم العميل / الحملة</label>
+          <input type="text" id="clientName" placeholder="حملة الإيمان" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">البريد الإلكتروني الأساسي (لاستقبال الأكواد)</label>
+          <input type="email" id="clientEmail" placeholder="client@gmail.com" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">كلمة مرور التطبيقات (App Password)</label>
+          <input type="password" id="clientAppPassword" placeholder="xxxx xxxx xxxx xxxx" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+          <span class="text-[11px] text-slate-500 block mt-1">كود الـ 16 حرف المولد من إعدادات حساب جوجل</span>
+        </div>
+
+        <button onclick="saveClientSettings()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700 flex items-center justify-center gap-2">
+          <i class="fa-regular fa-floppy-disk"></i> حفظ إعدادات العميل في المتصفح
         </button>
       </div>
+
+      <!-- 2. رفع الملف وإدارة العمليات -->
+      <div class="lg:col-span-2 bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col justify-between space-y-4">
+        <div>
+          <div class="flex items-center gap-2 border-b border-slate-800 pb-3 mb-4">
+            <i class="fa-solid fa-file-excel text-emerald-400"></i>
+            <h2 class="font-bold text-base">رفع كشف المعتمرين</h2>
+          </div>
+
+          <!-- منطقة الإفلات السحابية -->
+          <div id="dropArea" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-2xl p-8 text-center bg-slate-950/40 cursor-pointer transition">
+            <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="hidden">
+            <div class="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center text-xl mb-3">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-200 mb-1">اضغط هنا لاختيار ملف الإكسيل أو اسحبه وأفلته هنا</p>
+            <p class="text-xs text-slate-500">يدعم صيغ .xlsx أو .xls مباشرة</p>
+          </div>
+        </div>
+
+        <!-- شريط التشغيل والأزرار -->
+        <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800">
+          <div class="text-xs text-slate-400" id="fileInfoLabel">لم يتم اختيار أي ملف حتى الآن</div>
+          <div class="flex gap-3">
+            <button id="startBtn" onclick="runRegistrationEngine()" disabled class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition shadow-lg shadow-emerald-900/30 flex items-center gap-2">
+              <i class="fa-solid fa-play"></i> بدء التسجيل الآلي
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
 
-    <!-- جدول المعتمرين -->
-    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-      <table class="w-full text-right text-sm">
-        <thead class="bg-slate-700/50 text-slate-300 text-xs">
-          <tr>
-            <th class="p-3">#</th>
-            <th class="p-3">الاسم</th>
-            <th class="p-3">رقم الجواز</th>
-            <th class="p-3">رقم التأشيرة</th>
-            <th class="p-3">البريد الإلكتروني</th>
-            <th class="p-3">الحالة</th>
-          </tr>
-        </thead>
-        <tbody id="pilgrimsTable" class="divide-y divide-slate-700/50 text-slate-200">
-          <tr>
-            <td colspan="6" class="text-center p-4 text-slate-500">لم يتم رفع ملف بعد</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- جدول المعتمرين وتحديثات الحالة المباشرة -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+        <div>
+          <h3 class="font-bold text-base text-white">قائمة المعتمرين المسجلين بالكشف</h3>
+          <p class="text-xs text-slate-400">تحديث فوري لكل معتمر أثناء تنفيذ التسجيل في المحاكي</p>
+        </div>
+        <span id="batchBadge" class="text-xs px-3 py-1 rounded-full bg-slate-800 text-slate-300 font-medium">0 أسماء محملة</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-right text-xs">
+          <thead class="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800">
+            <tr>
+              <th class="p-3.5">#</th>
+              <th class="p-3.5">الاسم</th>
+              <th class="p-3.5">البريد الإلكتروني</th>
+              <th class="p-3.5">رقم الجواز</th>
+              <th class="p-3.5">رقم التأشيرة</th>
+              <th class="p-3.5">رمز OTP</th>
+              <th class="p-3.5 text-center">حالة العملية</th>
+            </tr>
+          </thead>
+          <tbody id="pilgrimTableBody" class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td colspan="7" class="text-center py-10 text-slate-500">
+                <i class="fa-solid fa-inbox text-3xl block mb-2 opacity-50"></i>
+                ارفع شيت الإكسيل لتظهر البيانات هنا
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-  </div>
+  </main>
 
   <script>
-    let pilgrimsData = [];
+    let pilgrimsList = [];
+    const LOCAL_ENGINE_URL = "http://127.0.0.1:8000";
 
-    // قراءة ملف الإكسيل فور اختياره
-    document.getElementById('excelFile').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
+    // استرجاع الإعدادات المحفوظة مسبقاً
+    window.onload = function() {
+      document.getElementById('clientName').value = localStorage.getItem('clientName') || '';
+      document.getElementById('clientEmail').value = localStorage.getItem('clientEmail') || '';
+      document.getElementById('clientAppPassword').value = localStorage.getItem('clientAppPassword') || '';
+      checkEngineConnection();
+    };
+
+    function saveClientSettings() {
+      localStorage.setItem('clientName', document.getElementById('clientName').value);
+      localStorage.setItem('clientEmail', document.getElementById('clientEmail').value);
+      localStorage.setItem('clientAppPassword', document.getElementById('clientAppPassword').value);
+      alert('تم حفظ إعدادات العميل بنجاح في المتصفح');
+    }
+
+    // التحقق من اتصال الباك إند المحلي
+    async function checkEngineConnection() {
+      const badge = document.getElementById('engineStatus');
+      try {
+        const res = await fetch(`${LOCAL_ENGINE_URL}/api/health`, { method: 'GET' });
+        if (res.ok) {
+          badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span><span class="text-emerald-400 font-medium">المحرك المحلي متصل وجاهز</span>`;
+        }
+      } catch (e) {
+        badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span><span class="text-amber-400">المحرك المحلي غير مشغل (py server.py)</span>`;
+      }
+    }
+
+    // إدارة رفع الإكسيل
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('excelFileInput');
+
+    dropArea.onclick = () => fileInput.click();
+
+    fileInput.onchange = (e) => handleExcelFile(e.target.files[0]);
+
+    function handleExcelFile(file) {
+      if (!file) return;
+      document.getElementById('fileInfoLabel').innerText = `الملف المختار: ${file.name}`;
       
-      reader.onload = function(evt) {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, {type: 'array'});
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(sheet);
         
-        pilgrimsData = json;
-        renderTable(json);
+        pilgrimsList = json;
+        renderPilgrimsTable(json);
         document.getElementById('startBtn').disabled = false;
+        document.getElementById('statTotal').innerText = json.length;
+        document.getElementById('batchBadge').innerText = `${json.length} معتمر جاهز`;
       };
       reader.readAsArrayBuffer(file);
-    });
+    }
 
-    function renderTable(data) {
-      const tbody = document.getElementById('pilgrimsTable');
+    function renderPilgrimsTable(data) {
+      const tbody = document.getElementById('pilgrimTableBody');
       tbody.innerHTML = '';
-      data.forEach((row, i) => {
+      data.forEach((p, idx) => {
         tbody.innerHTML += `
-          <tr id="row-${i}">
-            <td class="p-3">${i + 1}</td>
-            <td class="p-3 font-medium">${row['الاسم'] || row['Name'] || '-'}</td>
-            <td class="p-3">${row['رقم الجواز'] || row['Passport'] || '-'}</td>
-            <td class="p-3">${row['رقم التأشيرة'] || row['Visa'] || '-'}</td>
-            <td class="p-3">${row['البريد الإلكتروني'] || row['Email'] || '-'}</td>
-            <td class="p-3"><span id="status-${i}" class="bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs">قيد الانتظار</span></td>
+          <tr id="row-${idx}" class="hover:bg-slate-900/50 transition">
+            <td class="p-3.5 font-mono text-slate-500">${idx + 1}</td>
+            <td class="p-3.5 font-semibold text-slate-100">${p['الاسم'] || p['Name'] || '-'}</td>
+            <td class="p-3.5 font-mono text-slate-400">${p['البريد الإلكتروني'] || p['Email'] || '-'}</td>
+            <td class="p-3.5 font-mono">${p['رقم الجواز'] || p['Passport'] || '-'}</td>
+            <td class="p-3.5 font-mono">${p['رقم التأشيرة'] || p['Visa'] || '-'}</td>
+            <td class="p-3.5 font-mono text-amber-400" id="otp-${idx}">-</td>
+            <td class="p-3.5 text-center" id="status-${idx}">
+              <span class="px-2.5 py-1 rounded-full text-[11px] bg-slate-800 text-slate-400">بانتظار البدء</span>
+            </td>
           </tr>
         `;
       });
     }
 
-    async function startAutomation() {
+    // بدء تشغيل دورة التسجيل بالتتابع
+    async function runRegistrationEngine() {
+      const email = document.getElementById('clientEmail').value.trim();
+      const pass = document.getElementById('clientAppPassword').value.trim();
+
+      if (!email || !pass) {
+        alert('يرجى كتابة البريد الإلكتروني وكلمة مرور التطبيقات الخاصة بالعميل أولاً');
+        return;
+      }
+
       document.getElementById('startBtn').disabled = true;
-      for (let i = 0; i < pilgrimsData.length; i++) {
+      let successCount = 0;
+      let failedCount = 0;
+
+      for (let i = 0; i < pilgrimsList.length; i++) {
+        const p = pilgrimsList[i];
         const statusEl = document.getElementById(`status-${i}`);
-        statusEl.className = "bg-yellow-500/20 text-yellow-400 px-2.5 py-1 rounded text-xs animate-pulse";
-        statusEl.innerText = "جاري التسجيل...";
+        const otpEl = document.getElementById(`otp-${i}`);
+
+        statusEl.innerHTML = `<span class="px-2.5 py-1 rounded-full text-[11px] bg-amber-500/20 text-amber-400 animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-1"></i> جاري التسجيل...</span>`;
 
         try {
-          const res = await fetch('http://localhost:8000/api/register', {
+          const res = await fetch(`${LOCAL_ENGINE_URL}/api/register`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(pilgrimsData[i])
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_email: email,
+              client_pass: pass,
+              pilgrim: p
+            })
           });
+
           const result = await res.json();
-          
-          if(result.success) {
-            statusEl.className = "bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded text-xs";
-            statusEl.innerText = "تم بنجاح";
+          if (result.success) {
+            successCount++;
+            otpEl.innerText = result.otp || '✓';
+            statusEl.innerHTML = `<span class="px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/20 text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> تم التسجيل</span>`;
           } else {
-            statusEl.className = "bg-rose-500/20 text-rose-400 px-2.5 py-1 rounded text-xs";
-            statusEl.innerText = "فشل";
+            failedCount++;
+            statusEl.innerHTML = `<span class="px-2.5 py-1 rounded-full text-[11px] bg-rose-500/20 text-rose-400 font-semibold" title="${result.error || ''}"><i class="fa-solid fa-xmark mr-1"></i> فشل</span>`;
           }
         } catch (err) {
-          statusEl.className = "bg-rose-500/20 text-rose-400 px-2.5 py-1 rounded text-xs";
-          statusEl.innerText = "خطأ اتصال";
+          failedCount++;
+          statusEl.innerHTML = `<span class="px-2.5 py-1 rounded-full text-[11px] bg-rose-500/20 text-rose-400 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> خطأ اتصال</span>`;
         }
+
+        document.getElementById('statSuccess').innerText = successCount;
+        document.getElementById('statFailed').innerText = failedCount;
+        document.getElementById('statProgress').innerText = `${Math.round(((i + 1) / pilgrimsList.length) * 100)}%`;
       }
+
       document.getElementById('startBtn').disabled = false;
+      alert('اكتملت معالجة كشف المعتمرين');
     }
   </script>
 </body>
