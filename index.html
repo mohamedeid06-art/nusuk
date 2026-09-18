@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>منصة نسك برو | إدارة وتسجيل المعتمرين</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Cairo', sans-serif; }
@@ -21,7 +21,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <span id="systemStatus" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> جاهز للربط
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> متصل بالسيرفر
                 </span>
             </div>
         </header>
@@ -68,7 +68,7 @@
                             <th class="p-3">ملاحظات النظام</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody" class="divide-y divide-slate-800 text-slate-300">
+                    <tbody id="tableBody" class="divide-y border-slate-800 text-slate-300">
                         <tr>
                             <td colspan="6" class="p-8 text-center text-slate-500">قم برفع ملف الإكسيل لعرض الكشف بالكامل هنا</td>
                         </tr>
@@ -83,13 +83,24 @@
         let rawPilgrimsData = [];
         let isRunning = false;
 
-        function getPilgrimField(p, keys) {
-            for (let k of Object.keys(p)) {
-                let cleanKey = k.trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
-                for (let searchKey of keys) {
-                    let cleanSearch = searchKey.trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
-                    if (cleanKey === cleanSearch) {
-                        return p[k];
+        // دالة استخراج ذكية جداً تفحص جميع المفاتيح بغض النظر عن الهمزات والتاء المربوطة
+        function getPilgrimValue(row, possibleNames) {
+            for (let key of Object.keys(row)) {
+                let cleanKey = key.toString().trim()
+                    .replace(/[\u064B-\u065F]/g, '') // حذف التشكيل
+                    .replace(/[أإآ]/g, 'ا')
+                    .replace(/ة/g, 'ه')
+                    .replace(/\s+/g, '');
+
+                for (let target of possibleNames) {
+                    let cleanTarget = target.trim()
+                        .replace(/[أإآ]/g, 'ا')
+                        .replace(/ة/g, 'ه')
+                        .replace(/\s+/g, '');
+
+                    if (cleanKey === cleanTarget || cleanKey.includes(cleanTarget)) {
+                        let val = row[key];
+                        return (val !== undefined && val !== null) ? val.toString().trim() : "";
                     }
                 }
             }
@@ -102,19 +113,24 @@
 
             const reader = new FileReader();
             reader.onload = function(evt) {
-                const data = new Uint8Array(evt.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                rawPilgrimsData = XLSX.utils.sheet_to_json(firstSheet);
+                const data = evt.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                
+                // قراءة أول شيت موجود أياً كان اسمه (سواء Data أو غيره)
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                
+                // raw: false لضمان قراءة الأرقام الطويلة كنصوص بدقة وبدون تقريب علمي
+                rawPilgrimsData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
                 
                 rawPilgrimsData.forEach(p => {
-                    p["حالة التسجيل"] = p["حالة التسجيل"] || "قيد الانتظار";
+                    p["حالة التسجيل"] = p["حالة التسجيل"] || p["حالة الحجز"] || "قيد الانتظار";
                     p["ملاحظات"] = p["ملاحظات"] || "-";
                 });
 
                 renderTable();
             };
-            reader.readAsArrayBuffer(file);
+            reader.readAsBinaryString(file);
         });
 
         function renderTable() {
@@ -123,9 +139,9 @@
             tbody.innerHTML = '';
 
             rawPilgrimsData.forEach((p, idx) => {
-                const name = getPilgrimField(p, ["الاسم", "full_name", "Name"]) || "-";
-                const passport = getPilgrimField(p, ["رقم الجواز", "passport_number", "Passport", "الجواز"]) || "-";
-                const visa = getPilgrimField(p, ["رقم التاشيره", "رقم التأشيرة", "التاشيره", "التأشيرة", "visa_number", "Visa"]) || "-";
+                const name = getPilgrimValue(p, ["الاسم", "الاسم بالكامل", "Name", "full_name"]) || "-";
+                const passport = getPilgrimValue(p, ["رقم الجواز", "الجواز", "passport", "Passport"]) || "-";
+                const visa = getPilgrimValue(p, ["رقم التاشيرة", "رقم التاشيره", "التاشيرة", "التاشيره", "visa", "Visa"]) || "-";
                 
                 const status = p["حالة التسجيل"] || "قيد الانتظار";
                 const notes = p["ملاحظات"] || "-";
@@ -192,19 +208,22 @@
 
                     if (result.success) {
                         p["حالة التسجيل"] = "تم التسجيل";
+                        p["حالة الحجز"] = "تم التسجيل";
                         p["ملاحظات"] = `ناجح (كود OTP: ${result.otp || 'نعم'})`;
                     } else {
                         if (result.status === "already_registered") {
                             p["حالة التسجيل"] = "البيانات مسجلة مسبقاً";
-                            p["ملاحظات"] = "تم اكتشاف تسجيل مسبق - تم الخروج والتخطي";
+                            p["حالة الحجز"] = "مسجل مسبقاً";
+                            p["ملاحظات"] = "تم اكتشاف تسجيل مسبق - تم التخطي بأمان";
                         } else {
                             p["حالة التسجيل"] = "فشل التسجيل";
+                            p["حالة الحجز"] = "فشل";
                             p["ملاحظات"] = result.error || "خطأ في المعالجة";
                         }
                     }
                 } catch (err) {
                     p["حالة التسجيل"] = "فشل التسجيل";
-                    p["ملاحظات"] = "تعذر الاتصال بالسيرفر المحلي (تأكد من تشغيل server.py)";
+                    p["ملاحظات"] = "تعذر الاتصال بالسيرفر المحلي";
                 }
 
                 renderTable();
@@ -222,8 +241,8 @@
             }
             const worksheet = XLSX.utils.json_to_sheet(rawPilgrimsData);
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "كشف_المعتمرين_المحدث");
-            XLSX.writeFile(workbook, "كشف_المعتمرين_المحدث.xlsx");
+            XLSX.utils.book_append_sheet(workbook, worksheet, "النخبه_المحدث");
+            XLSX.writeFile(workbook, "النخبه_حجز_26_محدث.xlsx");
         }
     </script>
 </body>
