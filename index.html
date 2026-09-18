@@ -2,515 +2,216 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة نسك برو | نظام التسجيل الآلي المتعدد</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <title>منصة نسك برو | إدارة وتسجيل المعتمرين</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- مكتبة SheetJS لقراءة وتصدير ملفات Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #0b132b;
-            --card-bg: #1c2541;
-            --accent-color: #48cae4;
-            --success-color: #06d6a0;
-            --warning-color: #ffd166;
-            --danger-color: #ef476f;
-            --text-main: #ffffff;
-            --text-muted: #8d99ae;
-            --border-color: rgba(255, 255, 255, 0.08);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Cairo', sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            min-height: 100vh;
-            padding: 25px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--card-bg);
-            padding: 16px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-        }
-
-        .header-title {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .header-title h1 {
-            font-size: 1.3rem;
-            font-weight: 800;
-        }
-
-        .header-title p {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        .server-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            background: rgba(6, 214, 160, 0.1);
-            color: var(--success-color);
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: 1px solid rgba(6, 214, 160, 0.2);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--success-color);
-            box-shadow: 0 0 8px var(--success-color);
-        }
-
-        #intervention-banner {
-            display: none;
-            background: rgba(255, 209, 102, 0.15);
-            border: 1px solid var(--warning-color);
-            color: #fff;
-            padding: 16px 20px;
-            border-radius: 10px;
-            justify-content: space-between;
-            align-items: center;
-            animation: pulseGlow 1.5s infinite alternate;
-        }
-
-        @keyframes pulseGlow {
-            0% { box-shadow: 0 0 5px rgba(255, 209, 102, 0.2); }
-            100% { box-shadow: 0 0 15px rgba(255, 209, 102, 0.5); }
-        }
-
-        .btn-resume {
-            background: var(--warning-color);
-            color: #000;
-            font-weight: 800;
-            border: none;
-            padding: 10px 22px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: transform 0.1s ease;
-        }
-
-        .btn-resume:hover {
-            transform: scale(1.03);
-        }
-
-        .controls-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 15px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            padding: 18px;
-        }
-
-        .inputs-row {
-            display: flex;
-            gap: 12px;
-            margin-top: 10px;
-        }
-
-        input[type="text"], input[type="password"] {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border-color);
-            padding: 10px 14px;
-            border-radius: 8px;
-            color: #fff;
-            outline: none;
-        }
-
-        .file-upload-btn, .btn-action {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            background: #2a3b66;
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            font-weight: 700;
-            width: 100%;
-        }
-
-        .btn-start {
-            background: var(--success-color);
-            color: #000;
-            font-weight: 800;
-            border: none;
-            margin-top: 10px;
-        }
-
-        .btn-clear {
-            background: rgba(239, 71, 111, 0.15);
-            color: #ef476f;
-            border: 1px solid #ef476f;
-            padding: 5px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-weight: 700;
-            transition: all 0.2s ease;
-        }
-
-        .btn-clear:hover {
-            background: rgba(239, 71, 111, 0.3);
-        }
-
-        .table-container {
-            background: var(--card-bg);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-        }
-
-        .table-header {
-            padding: 16px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: right;
-            font-size: 0.9rem;
-        }
-
-        th {
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-muted);
-            padding: 12px 18px;
-            font-weight: 600;
-        }
-
-        td {
-            padding: 14px 18px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .badge-pending { background: rgba(255, 255, 255, 0.1); color: #fff; }
-        .badge-running { background: rgba(72, 202, 228, 0.2); color: var(--accent-color); }
-        .badge-success { background: rgba(6, 214, 160, 0.2); color: var(--success-color); }
-        .badge-error { background: rgba(239, 71, 111, 0.2); color: var(--danger-color); }
+        body { font-family: 'Cairo', sans-serif; }
     </style>
 </head>
-<body>
-
-    <header>
-        <div class="header-title">
-            <span style="font-size: 1.8rem;">🕋</span>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
             <div>
-                <h1>منصة نسك برو</h1>
-                <p>نظام إدارة التسجيل الآلي المتعدد للروضة الشريفة</p>
+                <h1 class="text-2xl font-black text-amber-500">نظام نسك الذكي للأتمتة</h1>
+                <p class="text-xs text-slate-400 mt-1">معالجة الكشوفات، إصدار التصاريح، وتحديث حالات التسجيل فورياً</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="systemStatus" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> متصل بالسيرفر
+                </span>
+            </div>
+        </header>
+
+        <!-- Credentials & Control Panel -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <label class="block text-xs font-bold text-slate-300 mb-1">البريد الإلكتروني (جيميل)</label>
+                <input id="clientEmail" type="email" placeholder="example@gmail.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-amber-500 outline-none text-left" dir="ltr">
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <label class="block text-xs font-bold text-slate-300 mb-1">كلمة مرور التطبيقات (App Password)</label>
+                <input id="clientPass" type="password" placeholder="16 حرف من Google" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-amber-500 outline-none text-left" dir="ltr">
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-end gap-2">
+                <label class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer text-center transition">
+                    📂 رفع كشف إكسيل
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="hidden">
+                </label>
+                <button id="startBtn" onclick="startProcessing()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-5 py-2 rounded-lg text-sm transition">
+                    بدء العمل
+                </button>
+                <button id="exportBtn" onclick="exportUpdatedExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition" title="تنزيل الإكسيل المحدث">
+                    📥 تصدير
+                </button>
             </div>
         </div>
-        <div class="server-status" id="server-status-pill">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="server-status-text">المحرك المحلي متصل وجاهز</span>
-        </div>
-    </header>
 
-    <div id="intervention-banner">
-        <div>
-            <span style="font-size: 1.2rem; margin-left: 8px;">⚠️</span>
-            <span id="intervention-msg" style="font-weight: 700;"></span>
-        </div>
-        <button class="btn-resume" onclick="resumeAutomation()">تم التنفيذ يدوياً، استئناف العملية ➔</button>
-    </div>
-
-    <div class="controls-grid">
-        <div class="card">
-            <h3 style="font-size: 1rem; margin-bottom: 6px;">بيانات بريد استلام الأكواد (Gmail OTP)</h3>
-            <div class="inputs-row">
-                <input type="text" id="client_email" placeholder="example@gmail.com" oninput="persistData()">
-                <input type="password" id="client_pass" placeholder="كلمة مرور التطبيقات (16 حرف)" oninput="persistData()">
+        <!-- Table Container -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                <h3 class="font-bold text-sm text-slate-200">كشف المعتمرين (<span id="totalCount">0</span>)</h3>
+                <div class="text-xs text-slate-400">سيتم حفظ التعديلات وإمكانية تصديرها فور الانتهاء</div>
+            </div>
+            <div class="overflow-x-auto max-h-[600px]">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-950 text-slate-400 uppercase border-b border-slate-800 sticky top-0">
+                        <tr>
+                            <th class="p-3">#</th>
+                            <th class="p-3">الاسم</th>
+                            <th class="p-3">رقم الجواز</th>
+                            <th class="p-3">رقم التأشيرة</th>
+                            <th class="p-3">الحالة</th>
+                            <th class="p-3">ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-800 text-slate-300">
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">قم برفع ملف الإكسيل لعرض البيانات هنا</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
-        <div class="card">
-            <input type="file" id="excel-file" accept=".xlsx, .xls" style="display: none;" onchange="handleFile(event)">
-            <label for="excel-file" class="file-upload-btn">📂 رفع شيت المعتمرين (Excel)</label>
-            <button class="btn-action btn-start" id="start-btn" onclick="startBatchRegistration()">بدء التسجيل التلقائي</button>
-        </div>
-    </div>
 
-    <div class="table-container">
-        <div class="table-header">
-            <h3 style="font-size: 1rem;">قائمة المعتمرين المسجلين بالكشف</h3>
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <button class="btn-clear" onclick="clearSavedData()">مسح الكشف الحالي</button>
-                <span id="counter-badge" class="badge badge-pending">0 معتمر جاهز</span>
-            </div>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>الاسم</th>
-                    <th>البريد الإلكتروني</th>
-                    <th>رقم الجواز</th>
-                    <th>رقم التأشيرة</th>
-                    <th>رمز OTP</th>
-                    <th>حالة العملية</th>
-                </tr>
-            </thead>
-            <tbody id="pilgrims-table-body">
-                <tr>
-                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
-                        لم يتم رفع ملف Excel حتى الآن. يرجى رفع الملف لبدء معالجة البيانات.
-                    </td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 
     <script>
-        const API_BASE = "http://127.0.0.1:8000";
-        let pilgrimsList = [];
-        let isProcessing = false;
+        let rawPilgrimsData = [];
+        let isRunning = false;
 
-        window.addEventListener("DOMContentLoaded", () => {
-            const savedPilgrims = localStorage.getItem("nusuk_pilgrims");
-            const savedEmail = localStorage.getItem("nusuk_client_email");
-            const savedPass = localStorage.getItem("nusuk_client_pass");
-
-            if (savedEmail) document.getElementById("client_email").value = savedEmail;
-            if (savedPass) document.getElementById("client_pass").value = savedPass;
-
-            if (savedPilgrims) {
-                try {
-                    pilgrimsList = JSON.parse(savedPilgrims);
-                    renderTable();
-                } catch (e) {
-                    console.error("خطأ في قراءة الكاش:", e);
-                }
-            }
-        });
-
-        function persistData() {
-            localStorage.setItem("nusuk_pilgrims", JSON.stringify(pilgrimsList));
-            localStorage.setItem("nusuk_client_email", document.getElementById("client_email").value.trim());
-            localStorage.setItem("nusuk_client_pass", document.getElementById("client_pass").value.trim());
-        }
-
-        function clearSavedData() {
-            if (confirm("هل تريد بالتأكيد مسح كشف المعتمرين الحالي والبدء من جديد؟")) {
-                localStorage.removeItem("nusuk_pilgrims");
-                pilgrimsList = [];
-                document.getElementById("excel-file").value = "";
-                renderTable();
-            }
-        }
-
-        setInterval(async () => {
-            try {
-                const res = await fetch(`${API_BASE}/api/status`);
-                const data = await res.json();
-                
-                const banner = document.getElementById("intervention-banner");
-                const msg = document.getElementById("intervention-msg");
-                const statusText = document.getElementById("server-status-text");
-                const dot = document.getElementById("status-dot");
-
-                statusText.innerText = "المحرك المحلي متصل وجاهز";
-                statusText.style.color = "var(--success-color)";
-                dot.style.background = "var(--success-color)";
-
-                if (data.status === "waiting_user") {
-                    banner.style.display = "flex";
-                    msg.innerText = data.message;
-                } else {
-                    banner.style.display = "none";
-                }
-            } catch (e) {
-                const statusText = document.getElementById("server-status-text");
-                const dot = document.getElementById("status-dot");
-                if (statusText && dot) {
-                    statusText.innerText = "المحرك المحلي غير متصل";
-                    statusText.style.color = "var(--danger-color)";
-                    dot.style.background = "var(--danger-color)";
-                }
-            }
-        }, 1000);
-
-        async function resumeAutomation() {
-            try {
-                await fetch(`${API_BASE}/api/resume`, { method: "POST" });
-                document.getElementById("intervention-banner").style.display = "none";
-            } catch (e) {
-                alert("تعذر إرسال أمر الاستئناف، تأكد من تشغيل السيرفر.");
-            }
-        }
-
-        function handleFile(e) {
+        document.getElementById('excelFileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = function (event) {
-                const data = new Uint8Array(event.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rawData = XLSX.utils.sheet_to_json(sheet);
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                rawPilgrimsData = XLSX.utils.sheet_to_json(firstSheet);
                 
-                pilgrimsList = rawData.map(item => ({
-                    ...item,
-                    _status: item._status || "جاهز",
-                    _badgeClass: item._badgeClass || "badge-pending",
-                    _otp: item._otp || "-"
-                }));
+                rawPilgrimsData.forEach(p => {
+                    p["حالة التسجيل"] = p["حالة التسجيل"] || "قيد الانتظار";
+                    p["ملاحظات"] = p["ملاحظات"] || "-";
+                });
 
-                persistData();
                 renderTable();
             };
             reader.readAsArrayBuffer(file);
-        }
+        });
 
         function renderTable() {
-            const tbody = document.getElementById("pilgrims-table-body");
-            tbody.innerHTML = "";
-            document.getElementById("counter-badge").innerText = `${pilgrimsList.length} معتمر جاهز`;
+            const tbody = document.getElementById('tableBody');
+            document.getElementById('totalCount').innerText = rawPilgrimsData.length;
+            tbody.innerHTML = '';
 
-            if (pilgrimsList.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
-                            لا يوجد معتمرين حالياً. ارفع ملف Excel لبدء المعالجة.
-                        </td>
-                    </tr>`;
-                return;
-            }
+            rawPilgrimsData.forEach((p, idx) => {
+                const name = p["الاسم"] || p["full_name"] || p["Name"] || "-";
+                const passport = p["رقم الجواز"] || p["passport_number"] || p["Passport"] || "-";
+                const visa = p["رقم التأشيرة"] || p["visa_number"] || p["Visa"] || "-";
+                const status = p["حالة التسجيل"];
+                const notes = p["ملاحظات"];
 
-            pilgrimsList.forEach((p, idx) => {
-                const tr = document.createElement("tr");
-                tr.id = `row-${idx}`;
-                tr.innerHTML = `
-                    <td>${idx + 1}</td>
-                    <td>${p.full_name || p["الاسم"] || p.Name || "-"}</td>
-                    <td>${p.email || p["البريد الإلكتروني"] || p.Email || "-"}</td>
-                    <td>${p.passport_number || p["رقم الجواز"] || p.Passport || "-"}</td>
-                    <td>${p.visa_number || p["رقم التأشيرة"] || p.Visa || "-"}</td>
-                    <td id="otp-${idx}">${p._otp || "-"}</td>
-                    <td><span class="badge ${p._badgeClass || 'badge-pending'}" id="status-${idx}">${p._status || 'جاهز'}</span></td>
+                let badgeColor = "bg-slate-800 text-slate-300";
+                if (status === "تم التسجيل") badgeColor = "bg-emerald-950 text-emerald-400 border border-emerald-800";
+                if (status === "البيانات مسجلة مسبقاً") badgeColor = "bg-amber-950 text-amber-400 border border-amber-800";
+                if (status === "فشل التسجيل") badgeColor = "bg-rose-950 text-rose-400 border border-rose-800";
+                if (status === "جاري التنفيذ...") badgeColor = "bg-cyan-950 text-cyan-400 border border-cyan-800 animate-pulse";
+
+                const tr = `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-3 text-slate-500">${idx + 1}</td>
+                        <td class="p-3 font-semibold text-slate-200">${name}</td>
+                        <td class="p-3 font-mono">${passport}</td>
+                        <td class="p-3 font-mono">${visa}</td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${badgeColor}">${status}</span></td>
+                        <td class="p-3 text-slate-400 text-[11px]">${notes}</td>
+                    </tr>
                 `;
-                tbody.appendChild(tr);
+                tbody.innerHTML += tr;
             });
         }
 
-        async function startBatchRegistration() {
-            if (isProcessing) return;
-            const email = document.getElementById("client_email").value.trim();
-            const pass = document.getElementById("client_pass").value.trim();
+        async function startProcessing() {
+            const email = document.getElementById('clientEmail').value.trim();
+            const pass = document.getElementById('clientPass').value.trim();
 
             if (!email || !pass) {
-                alert("يرجى إدخال إيميل وباسورد الـ Gmail أولاً!");
+                alert("يرجى إدخال الجيميل وكلمة مرور التطبيق أولاً.");
                 return;
             }
-            if (pilgrimsList.length === 0) {
-                alert("يرجى رفع ملف Excel أولاً!");
+            if (rawPilgrimsData.length === 0) {
+                alert("يرجى تحميل ملف إكسيل أولاً.");
                 return;
             }
 
-            persistData();
-            isProcessing = true;
-            document.getElementById("start-btn").disabled = true;
+            isRunning = true;
+            document.getElementById('startBtn').disabled = true;
 
-            for (let i = 0; i < pilgrimsList.length; i++) {
-                if (pilgrimsList[i]._status === "ناجح") {
+            for (let i = 0; i < rawPilgrimsData.length; i++) {
+                if (!isRunning) break;
+                const p = rawPilgrimsData[i];
+
+                if (p["حالة التسجيل"] === "تم التسجيل" || p["حالة التسجيل"] === "البيانات مسجلة مسبقاً") {
                     continue;
                 }
 
-                const statusBadge = document.getElementById(`status-${i}`);
-                if (statusBadge) {
-                    statusBadge.className = "badge badge-running";
-                    statusBadge.innerText = "جاري التسجيل...";
-                }
-                pilgrimsList[i]._status = "جاري التسجيل...";
-                pilgrimsList[i]._badgeClass = "badge-running";
+                p["حالة التسجيل"] = "جاري التنفيذ...";
+                p["ملاحظات"] = "جاري إدخال البيانات في نسك...";
+                renderTable();
 
                 try {
-                    const res = await fetch(`${API_BASE}/api/register`, {
+                    const res = await fetch("http://127.0.0.1:8000/api/register", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             client_email: email,
                             client_pass: pass,
-                            pilgrim: pilgrimsList[i]
+                            pilgrim: p
                         })
                     });
+                    const result = await res.json();
 
-                    const data = await res.json();
-                    if (data.success) {
-                        if (statusBadge) {
-                            statusBadge.className = "badge badge-success";
-                            statusBadge.innerText = "ناجح";
-                        }
-                        pilgrimsList[i]._status = "ناجح";
-                        pilgrimsList[i]._badgeClass = "badge-success";
-
-                        if (data.otp) {
-                            const otpCell = document.getElementById(`otp-${i}`);
-                            if (otpCell) otpCell.innerText = data.otp;
-                            pilgrimsList[i]._otp = data.otp;
-                        }
+                    if (result.success) {
+                        p["حالة التسجيل"] = "تم التسجيل";
+                        p["ملاحظات"] = `ناجح (OTP: ${result.otp || 'نعم'})`;
                     } else {
-                        if (statusBadge) {
-                            statusBadge.className = "badge badge-error";
-                            statusBadge.innerText = "فشل";
+                        if (result.status === "already_registered") {
+                            p["حالة التسجيل"] = "البيانات مسجلة مسبقاً";
+                            p["ملاحظات"] = "تم اكتشاف تسجيل مسبق - تم التخطي بأمان";
+                        } else {
+                            p["حالة التسجيل"] = "فشل التسجيل";
+                            p["ملاحظات"] = result.error || "خطأ غير معروف";
                         }
-                        pilgrimsList[i]._status = "فشل";
-                        pilgrimsList[i]._badgeClass = "badge-error";
                     }
-                } catch (e) {
-                    if (statusBadge) {
-                        statusBadge.className = "badge badge-error";
-                        statusBadge.innerText = "خطأ اتصال";
-                    }
-                    pilgrimsList[i]._status = "خطأ اتصال";
-                    pilgrimsList[i]._badgeClass = "badge-error";
+                } catch (err) {
+                    p["حالة التسجيل"] = "فشل التسجيل";
+                    p["ملاحظات"] = "تعذر الاتصال بالسيرفر المحلي";
                 }
 
-                persistData();
+                renderTable();
             }
 
-            isProcessing = false;
-            document.getElementById("start-btn").disabled = false;
+            isRunning = false;
+            document.getElementById('startBtn').disabled = false;
+            alert("اكتملت معالجة الكشف!");
+        }
+
+        function exportUpdatedExcel() {
+            if (rawPilgrimsData.length === 0) {
+                alert("لا توجد بيانات لتصديرها.");
+                return;
+            }
+            const worksheet = XLSX.utils.json_to_sheet(rawPilgrimsData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "نتائج_نسك");
+            XLSX.writeFile(workbook, "كشف_المعتمرين_المحدث.xlsx");
         }
     </script>
 </body>
