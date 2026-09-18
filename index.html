@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>منصة نسك برو | إدارة وتسجيل المعتمرين</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- مكتبة SheetJS لقراءة وتصدير ملفات Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
@@ -19,16 +17,16 @@
         <header class="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
             <div>
                 <h1 class="text-2xl font-black text-amber-500">نظام نسك الذكي للأتمتة</h1>
-                <p class="text-xs text-slate-400 mt-1">معالجة الكشوفات، إصدار التصاريح، وتحديث حالات التسجيل فورياً</p>
+                <p class="text-xs text-slate-400 mt-1">معالجة الكشوفات، استخراج التأشيرات، وإدارة حالات التسجيل فورياً</p>
             </div>
             <div class="flex items-center gap-3">
                 <span id="systemStatus" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> متصل بالسيرفر
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> جاهز للربط
                 </span>
             </div>
         </header>
 
-        <!-- Credentials & Control Panel -->
+        <!-- Configuration Bar -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
                 <label class="block text-xs font-bold text-slate-300 mb-1">البريد الإلكتروني (جيميل)</label>
@@ -52,11 +50,11 @@
             </div>
         </div>
 
-        <!-- Table Container -->
+        <!-- Table View -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
             <div class="p-4 border-b border-slate-800 flex justify-between items-center">
                 <h3 class="font-bold text-sm text-slate-200">كشف المعتمرين (<span id="totalCount">0</span>)</h3>
-                <div class="text-xs text-slate-400">سيتم حفظ التعديلات وإمكانية تصديرها فور الانتهاء</div>
+                <div class="text-xs text-slate-400">تحديث تلقائي وفوري لحالة كل معتمر مع التخطي الآمن</div>
             </div>
             <div class="overflow-x-auto max-h-[600px]">
                 <table class="w-full text-right text-xs">
@@ -67,12 +65,12 @@
                             <th class="p-3">رقم الجواز</th>
                             <th class="p-3">رقم التأشيرة</th>
                             <th class="p-3">الحالة</th>
-                            <th class="p-3">ملاحظات</th>
+                            <th class="p-3">ملاحظات النظام</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody" class="divide-y divide-slate-800 text-slate-300">
                         <tr>
-                            <td colspan="6" class="p-8 text-center text-slate-500">قم برفع ملف الإكسيل لعرض البيانات هنا</td>
+                            <td colspan="6" class="p-8 text-center text-slate-500">قم برفع ملف الإكسيل لعرض الكشف بالكامل هنا</td>
                         </tr>
                     </tbody>
                 </table>
@@ -84,6 +82,19 @@
     <script>
         let rawPilgrimsData = [];
         let isRunning = false;
+
+        function getPilgrimField(p, keys) {
+            for (let k of Object.keys(p)) {
+                let cleanKey = k.trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
+                for (let searchKey of keys) {
+                    let cleanSearch = searchKey.trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
+                    if (cleanKey === cleanSearch) {
+                        return p[k];
+                    }
+                }
+            }
+            return "";
+        }
 
         document.getElementById('excelFileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -112,11 +123,12 @@
             tbody.innerHTML = '';
 
             rawPilgrimsData.forEach((p, idx) => {
-                const name = p["الاسم"] || p["full_name"] || p["Name"] || "-";
-                const passport = p["رقم الجواز"] || p["passport_number"] || p["Passport"] || "-";
-                const visa = p["رقم التأشيرة"] || p["visa_number"] || p["Visa"] || "-";
-                const status = p["حالة التسجيل"];
-                const notes = p["ملاحظات"];
+                const name = getPilgrimField(p, ["الاسم", "full_name", "Name"]) || "-";
+                const passport = getPilgrimField(p, ["رقم الجواز", "passport_number", "Passport", "الجواز"]) || "-";
+                const visa = getPilgrimField(p, ["رقم التاشيره", "رقم التأشيرة", "التاشيره", "التأشيرة", "visa_number", "Visa"]) || "-";
+                
+                const status = p["حالة التسجيل"] || "قيد الانتظار";
+                const notes = p["ملاحظات"] || "-";
 
                 let badgeColor = "bg-slate-800 text-slate-300";
                 if (status === "تم التسجيل") badgeColor = "bg-emerald-950 text-emerald-400 border border-emerald-800";
@@ -128,8 +140,8 @@
                     <tr class="hover:bg-slate-800/40 transition">
                         <td class="p-3 text-slate-500">${idx + 1}</td>
                         <td class="p-3 font-semibold text-slate-200">${name}</td>
-                        <td class="p-3 font-mono">${passport}</td>
-                        <td class="p-3 font-mono">${visa}</td>
+                        <td class="p-3 font-mono text-slate-300">${passport}</td>
+                        <td class="p-3 font-mono text-amber-400 font-bold">${visa}</td>
                         <td class="p-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${badgeColor}">${status}</span></td>
                         <td class="p-3 text-slate-400 text-[11px]">${notes}</td>
                     </tr>
@@ -143,7 +155,7 @@
             const pass = document.getElementById('clientPass').value.trim();
 
             if (!email || !pass) {
-                alert("يرجى إدخال الجيميل وكلمة مرور التطبيق أولاً.");
+                alert("يرجى إدخال الجيميل وكلمة مرور التطبيقات أولاً.");
                 return;
             }
             if (rawPilgrimsData.length === 0) {
@@ -163,7 +175,7 @@
                 }
 
                 p["حالة التسجيل"] = "جاري التنفيذ...";
-                p["ملاحظات"] = "جاري إدخال البيانات في نسك...";
+                p["ملاحظات"] = "جاري إدخال البيانات في تطبيق نسك...";
                 renderTable();
 
                 try {
@@ -180,19 +192,19 @@
 
                     if (result.success) {
                         p["حالة التسجيل"] = "تم التسجيل";
-                        p["ملاحظات"] = `ناجح (OTP: ${result.otp || 'نعم'})`;
+                        p["ملاحظات"] = `ناجح (كود OTP: ${result.otp || 'نعم'})`;
                     } else {
                         if (result.status === "already_registered") {
                             p["حالة التسجيل"] = "البيانات مسجلة مسبقاً";
-                            p["ملاحظات"] = "تم اكتشاف تسجيل مسبق - تم التخطي بأمان";
+                            p["ملاحظات"] = "تم اكتشاف تسجيل مسبق - تم الخروج والتخطي";
                         } else {
                             p["حالة التسجيل"] = "فشل التسجيل";
-                            p["ملاحظات"] = result.error || "خطأ غير معروف";
+                            p["ملاحظات"] = result.error || "خطأ في المعالجة";
                         }
                     }
                 } catch (err) {
                     p["حالة التسجيل"] = "فشل التسجيل";
-                    p["ملاحظات"] = "تعذر الاتصال بالسيرفر المحلي";
+                    p["ملاحظات"] = "تعذر الاتصال بالسيرفر المحلي (تأكد من تشغيل server.py)";
                 }
 
                 renderTable();
@@ -200,7 +212,7 @@
 
             isRunning = false;
             document.getElementById('startBtn').disabled = false;
-            alert("اكتملت معالجة الكشف!");
+            alert("تم الانتهاء من معالجة الكشف بالكامل!");
         }
 
         function exportUpdatedExcel() {
@@ -210,7 +222,7 @@
             }
             const worksheet = XLSX.utils.json_to_sheet(rawPilgrimsData);
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "نتائج_نسك");
+            XLSX.utils.book_append_sheet(workbook, worksheet, "كشف_المعتمرين_المحدث");
             XLSX.writeFile(workbook, "كشف_المعتمرين_المحدث.xlsx");
         }
     </script>
