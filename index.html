@@ -83,7 +83,6 @@
             box-shadow: 0 0 8px var(--success-color);
         }
 
-        /* شريط التدخل البشري التفاعلي */
         #intervention-banner {
             display: none;
             background: rgba(255, 209, 102, 0.15);
@@ -116,7 +115,6 @@
             transform: scale(1.03);
         }
 
-        /* أدوات التحكم وإعدادات الحساب */
         .controls-grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
@@ -169,7 +167,22 @@
             margin-top: 10px;
         }
 
-        /* جدول بيانات المعتمرين */
+        .btn-clear {
+            background: rgba(239, 71, 111, 0.15);
+            color: #ef476f;
+            border: 1px solid #ef476f;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+
+        .btn-clear:hover {
+            background: rgba(239, 71, 111, 0.3);
+        }
+
         .table-container {
             background: var(--card-bg);
             border-radius: 12px;
@@ -234,7 +247,6 @@
         </div>
     </header>
 
-    <!-- شريط التوقف الذكي وطلب تدخل المستخدم -->
     <div id="intervention-banner">
         <div>
             <span style="font-size: 1.2rem; margin-left: 8px;">⚠️</span>
@@ -247,8 +259,8 @@
         <div class="card">
             <h3 style="font-size: 1rem; margin-bottom: 6px;">بيانات بريد استلام الأكواد (Gmail OTP)</h3>
             <div class="inputs-row">
-                <input type="text" id="client_email" placeholder="example@gmail.com">
-                <input type="password" id="client_pass" placeholder="كلمة مرور التطبيقات (16 حرف)">
+                <input type="text" id="client_email" placeholder="example@gmail.com" oninput="persistData()">
+                <input type="password" id="client_pass" placeholder="كلمة مرور التطبيقات (16 حرف)" oninput="persistData()">
             </div>
         </div>
         <div class="card">
@@ -261,7 +273,10 @@
     <div class="table-container">
         <div class="table-header">
             <h3 style="font-size: 1rem;">قائمة المعتمرين المسجلين بالكشف</h3>
-            <span id="counter-badge" class="badge badge-pending">0 معتمر جاهز</span>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <button class="btn-clear" onclick="clearSavedData()">مسح الكشف الحالي</button>
+                <span id="counter-badge" class="badge badge-pending">0 معتمر جاهز</span>
+            </div>
         </div>
         <table>
             <thead>
@@ -290,7 +305,39 @@
         let pilgrimsList = [];
         let isProcessing = false;
 
-        // التحقق من صحة حالة المحرك المحلي وتحديث شريط التوقف
+        window.addEventListener("DOMContentLoaded", () => {
+            const savedPilgrims = localStorage.getItem("nusuk_pilgrims");
+            const savedEmail = localStorage.getItem("nusuk_client_email");
+            const savedPass = localStorage.getItem("nusuk_client_pass");
+
+            if (savedEmail) document.getElementById("client_email").value = savedEmail;
+            if (savedPass) document.getElementById("client_pass").value = savedPass;
+
+            if (savedPilgrims) {
+                try {
+                    pilgrimsList = JSON.parse(savedPilgrims);
+                    renderTable();
+                } catch (e) {
+                    console.error("خطأ في قراءة الكاش:", e);
+                }
+            }
+        });
+
+        function persistData() {
+            localStorage.setItem("nusuk_pilgrims", JSON.stringify(pilgrimsList));
+            localStorage.setItem("nusuk_client_email", document.getElementById("client_email").value.trim());
+            localStorage.setItem("nusuk_client_pass", document.getElementById("client_pass").value.trim());
+        }
+
+        function clearSavedData() {
+            if (confirm("هل تريد بالتأكيد مسح كشف المعتمرين الحالي والبدء من جديد؟")) {
+                localStorage.removeItem("nusuk_pilgrims");
+                pilgrimsList = [];
+                document.getElementById("excel-file").value = "";
+                renderTable();
+            }
+        }
+
         setInterval(async () => {
             try {
                 const res = await fetch(`${API_BASE}/api/status`);
@@ -298,6 +345,12 @@
                 
                 const banner = document.getElementById("intervention-banner");
                 const msg = document.getElementById("intervention-msg");
+                const statusText = document.getElementById("server-status-text");
+                const dot = document.getElementById("status-dot");
+
+                statusText.innerText = "المحرك المحلي متصل وجاهز";
+                statusText.style.color = "var(--success-color)";
+                dot.style.background = "var(--success-color)";
 
                 if (data.status === "waiting_user") {
                     banner.style.display = "flex";
@@ -306,8 +359,13 @@
                     banner.style.display = "none";
                 }
             } catch (e) {
-                document.getElementById("server-status-text").innerText = "المحرك المحلي غير متصل";
-                document.getElementById("status-dot").style.background = "#ef476f";
+                const statusText = document.getElementById("server-status-text");
+                const dot = document.getElementById("status-dot");
+                if (statusText && dot) {
+                    statusText.innerText = "المحرك المحلي غير متصل";
+                    statusText.style.color = "var(--danger-color)";
+                    dot.style.background = "var(--danger-color)";
+                }
             }
         }, 1000);
 
@@ -329,7 +387,16 @@
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                pilgrimsList = XLSX.utils.sheet_to_json(sheet);
+                const rawData = XLSX.utils.sheet_to_json(sheet);
+                
+                pilgrimsList = rawData.map(item => ({
+                    ...item,
+                    _status: item._status || "جاهز",
+                    _badgeClass: item._badgeClass || "badge-pending",
+                    _otp: item._otp || "-"
+                }));
+
+                persistData();
                 renderTable();
             };
             reader.readAsArrayBuffer(file);
@@ -340,6 +407,16 @@
             tbody.innerHTML = "";
             document.getElementById("counter-badge").innerText = `${pilgrimsList.length} معتمر جاهز`;
 
+            if (pilgrimsList.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                            لا يوجد معتمرين حالياً. ارفع ملف Excel لبدء المعالجة.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
             pilgrimsList.forEach((p, idx) => {
                 const tr = document.createElement("tr");
                 tr.id = `row-${idx}`;
@@ -349,8 +426,8 @@
                     <td>${p.email || p["البريد الإلكتروني"] || p.Email || "-"}</td>
                     <td>${p.passport_number || p["رقم الجواز"] || p.Passport || "-"}</td>
                     <td>${p.visa_number || p["رقم التأشيرة"] || p.Visa || "-"}</td>
-                    <td id="otp-${idx}">-</td>
-                    <td><span class="badge badge-pending" id="status-${idx}">جاهز</span></td>
+                    <td id="otp-${idx}">${p._otp || "-"}</td>
+                    <td><span class="badge ${p._badgeClass || 'badge-pending'}" id="status-${idx}">${p._status || 'جاهز'}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -366,17 +443,26 @@
                 return;
             }
             if (pilgrimsList.length === 0) {
-                alert("يرجى رفع ملف Excel يحتوي على بيانات المعتمرين أولاً!");
+                alert("يرجى رفع ملف Excel أولاً!");
                 return;
             }
 
+            persistData();
             isProcessing = true;
             document.getElementById("start-btn").disabled = true;
 
             for (let i = 0; i < pilgrimsList.length; i++) {
+                if (pilgrimsList[i]._status === "ناجح") {
+                    continue;
+                }
+
                 const statusBadge = document.getElementById(`status-${i}`);
-                statusBadge.className = "badge badge-running";
-                statusBadge.innerText = "جاري التسجيل...";
+                if (statusBadge) {
+                    statusBadge.className = "badge badge-running";
+                    statusBadge.innerText = "جاري التسجيل...";
+                }
+                pilgrimsList[i]._status = "جاري التسجيل...";
+                pilgrimsList[i]._badgeClass = "badge-running";
 
                 try {
                     const res = await fetch(`${API_BASE}/api/register`, {
@@ -391,17 +477,36 @@
 
                     const data = await res.json();
                     if (data.success) {
-                        statusBadge.className = "badge badge-success";
-                        statusBadge.innerText = "ناجح";
-                        if (data.otp) document.getElementById(`otp-${i}`).innerText = data.otp;
+                        if (statusBadge) {
+                            statusBadge.className = "badge badge-success";
+                            statusBadge.innerText = "ناجح";
+                        }
+                        pilgrimsList[i]._status = "ناجح";
+                        pilgrimsList[i]._badgeClass = "badge-success";
+
+                        if (data.otp) {
+                            const otpCell = document.getElementById(`otp-${i}`);
+                            if (otpCell) otpCell.innerText = data.otp;
+                            pilgrimsList[i]._otp = data.otp;
+                        }
                     } else {
-                        statusBadge.className = "badge badge-error";
-                        statusBadge.innerText = "فشل";
+                        if (statusBadge) {
+                            statusBadge.className = "badge badge-error";
+                            statusBadge.innerText = "فشل";
+                        }
+                        pilgrimsList[i]._status = "فشل";
+                        pilgrimsList[i]._badgeClass = "badge-error";
                     }
                 } catch (e) {
-                    statusBadge.className = "badge badge-error";
-                    statusBadge.innerText = "خطأ اتصال";
+                    if (statusBadge) {
+                        statusBadge.className = "badge badge-error";
+                        statusBadge.innerText = "خطأ اتصال";
+                    }
+                    pilgrimsList[i]._status = "خطأ اتصال";
+                    pilgrimsList[i]._badgeClass = "badge-error";
                 }
+
+                persistData();
             }
 
             isProcessing = false;
