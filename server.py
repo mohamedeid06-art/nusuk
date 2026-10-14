@@ -391,19 +391,31 @@ def register(data: dict):
         # 2. تعبئة بيانات الحساب (الاسم، الإيميل، الباسورد)
         fill_registration_fields(device, name, email, password)
 
-        # 3. الضغط على زر "أنشئ حسابك"
+        # 3. الضغط على زر "أنشئ حسابك" الفعلي في أسفل النموذج (وليس عنوان الصفحة العلوي)
         time.sleep(0.5)
-        btn_submit = device(text="أنشئ حسابك")
-        if not btn_submit.exists:
-            btn_submit = device(textContains="أنشئ حسابك")
-        if btn_submit.exists:
-            btn_submit.click()
+        clicked = False
+        items = device(text="أنشئ حسابك")
+        if len(items) >= 2:
+            # إذا وجد أكثر من عنصر، فالعنصر الأخير هو الزر السفلي
+            b = items[len(items) - 1].info["bounds"]
+            cx = (b["left"] + b["right"]) // 2
+            cy = (b["top"] + b["bottom"]) // 2
+            device.click(cx, cy)
+            clicked = True
+            print(f"[PROCESS] Clicked bottom 'أنشئ حسابك' button at ({cx}, {cy})")
+        elif len(items) == 1:
+            items[0].click()
+            clicked = True
             print("[PROCESS] Clicked 'أنشئ حسابك'")
-        else:
-            # محاولة البحث عن زر الإرسال بواسطة XPath
-            btns = device.xpath('//android.widget.Button').all()
+
+        if not clicked:
+            btns = device.xpath('//android.widget.TextView[contains(@text, "أنشئ حساب")]').all()
             if btns:
                 btns[-1].click()
+                print("[PROCESS] Clicked last matching text element via XPath")
+            else:
+                device.click(540, 1140)
+                print("[PROCESS] Clicked fallback coordinates (540, 1140)")
 
         time.sleep(2.5)
 
