@@ -318,8 +318,27 @@ function retryFailedPilgrims() {
     renderPilgrimsTable();
 }
 
+function syncQueueToServer() {
+    try {
+        const payload = {
+            nusuk_active_email: localStorage.getItem("nusuk_active_email") || document.getElementById("clientEmail")?.value.trim() || "",
+            nusuk_active_pass: localStorage.getItem("nusuk_active_pass") || document.getElementById("clientPass")?.value.trim() || "",
+            nusuk_account_pass: localStorage.getItem("nusuk_account_pass") || document.getElementById("nusukAccountPass")?.value.trim() || "Msamy2006**",
+            nusuk_nat_text: localStorage.getItem("nusuk_nat_text") || document.getElementById("natText")?.value.trim() || "تايلاند",
+            nusuk_nat_opt: localStorage.getItem("nusuk_nat_opt") || document.getElementById("natOption")?.value || "1",
+            pilgrimsList: pilgrimsList
+        };
+        fetch(`${API_BASE}/api/sync_queue`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).catch(() => {});
+    } catch (e) {}
+}
+
 function savePilgrimsToStorage() {
     localStorage.setItem("nusuk_pilgrims_queue", JSON.stringify(pilgrimsList));
+    syncQueueToServer();
 }
 
 // 6. تشغيل الأتمتة وإرسال الجنسية المختارة إلى السيرفر
@@ -524,6 +543,7 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
             pilgrimsList = [];
         }
         renderPilgrimsTable();
+        syncQueueToServer();
 
         // فحص سيرفر البايثون المحلي
         checkServerStatus();
@@ -539,6 +559,7 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
 // =========================================================================
 // ربط جميع الدوال صراحة بـ window لضمان عمل onclick في HTML بدون أي أخطاء
 // =========================================================================
+window.syncQueueToServer = syncQueueToServer;
 window.checkServerStatus = checkServerStatus;
 window.setNatPreset = setNatPreset;
 window.saveNatSettings = saveNatSettings;

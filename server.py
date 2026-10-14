@@ -1,5 +1,6 @@
 import email
 import imaplib
+import json
 import os
 import re
 import shutil
@@ -506,6 +507,27 @@ def home():
         "version": "2.3",
         "device_connected": d is not None and is_device_alive(d)
     }
+
+@app.post("/api/sync_queue")
+async def sync_queue(request: Request):
+    try:
+        body = await request.json()
+        with open("active_queue.json", "w", encoding="utf-8") as f:
+            json.dump(body, f, ensure_ascii=False, indent=2)
+        count = len(body.get("pilgrimsList") or body.get("pilgrims") or [])
+        print(f"[SYNC] Received queue with {count} pilgrims. Saved to active_queue.json")
+        return {"success": True, "count": count, "message": f"تم استلام وتحديث الكشف بنجاح ({count} معتمر)"}
+    except Exception as e:
+        print(f"[SYNC ERROR] {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/sync_queue")
+def get_sync_queue():
+    if os.path.exists("active_queue.json"):
+        with open("active_queue.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"pilgrimsList": [], "credentials": {}}
+
 
 @app.post("/api/register")
 def register(data: dict):
