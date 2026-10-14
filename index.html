@@ -3,65 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة أتمتة نسك الاحترافية | Nusuk Pro</title>
-    <!-- Tailwind CSS -->
+    <title>منصة أتمتة وإدارة نسك المتكاملة | Nusuk ERP Pro</title>
+
+    <!-- إعدادات تطبيق الويب (PWA) والأيقونة -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <link rel="apple-touch-icon" href="./icon.svg">
+    <meta name="theme-color" content="#0f172a">
+
+    <!-- المكتبات الخارجية والخطوط -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS لقراءة وتصدير ملفات الإكسل -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Font Awesome للأيقونات -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- خط Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Cairo', sans-serif; background-color: #0f172a; color: #f8fafc; }
-        .glass { background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .gold-gradient { background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%); }
-        .nat-btn-active { background-color: #f59e0b !important; color: #020617 !important; border-color: #f59e0b !important; box-shadow: 0 0 12px rgba(245, 158, 11, 0.4); }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-    </style>
+
+    <!-- ملف التصميم الخاص بالمنصة -->
+    <link rel="stylesheet" href="./style.css">
 </head>
-<body class="min-h-screen p-4 md:p-6">
+<body class="min-h-screen p-3 md:p-6">
 
-    <!-- Header -->
-    <header class="max-w-7xl mx-auto mb-6 flex flex-wrap justify-between items-center glass p-4 rounded-2xl shadow-lg">
-        <div class="flex items-center gap-3">
-            <div class="w-12 h-12 rounded-xl gold-gradient flex items-center justify-center text-slate-900 font-bold text-2xl shadow-md">
-                <i class="fa-solid fa-kaaba"></i>
+    <!-- الشريط العلوي والتنقل بين الصفحات الـ 3 -->
+    <header class="max-w-7xl mx-auto mb-6 glass p-4 rounded-2xl shadow-lg">
+        <div class="flex flex-wrap justify-between items-center gap-4">
+            <!-- اللوجو والعنوان -->
+            <div class="flex items-center gap-3">
+                <img src="./icon.svg" alt="Nusuk Logo" class="w-12 h-12 rounded-xl shadow-md">
+                <div>
+                    <h1 class="text-lg md:text-xl font-extrabold text-amber-400 tracking-wide">Nusuk ERP & Automation Pro</h1>
+                    <p class="text-[11px] text-slate-400">نظام الأتمتة، جدولة الروضة، وحسابات Google Drive</p>
+                </div>
             </div>
-            <div>
-                <h1 class="text-xl font-extrabold text-amber-400 tracking-wide">Nusuk Automation Pro</h1>
-                <p class="text-xs text-slate-400">نظام التسجيل التلقائي الذكي وإدارة الحسابات</p>
-            </div>
-        </div>
 
-        <div class="flex items-center gap-4 mt-3 sm:mt-0">
-            <div id="serverStatusBadge" class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
-                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-                <span id="statusText" class="text-slate-300">جاري فحص السيرفر...</span>
+            <!-- أزرار التنقل بين الصفحات الثلاث -->
+            <nav class="flex flex-wrap items-center bg-slate-900/90 p-1.5 rounded-xl border border-slate-700/80 gap-1">
+                <button id="tabBtnAutomation" onclick="switchPage('automation')" class="nav-tab-active px-3.5 py-2 rounded-lg text-xs font-bold text-slate-300 transition flex items-center gap-2">
+                    <i class="fa-solid fa-robot"></i> أتمتة نسك
+                </button>
+                <button id="tabBtnCalendar" onclick="switchPage('calendar')" class="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-days"></i> مواعيد الروضة والكليندر
+                </button>
+                <button id="tabBtnAccounting" onclick="switchPage('accounting')" class="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition flex items-center gap-2">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> الحسابات و Google Drive
+                </button>
+            </nav>
+
+            <!-- حالة السحابة والسيرفر وتثبيت التطبيق -->
+            <div class="flex items-center gap-2">
+                <!-- زرار المزامنة السحابية الفورية -->
+                <button onclick="syncFromCloud(true)" title="تحديث البيانات من Google Drive" class="flex items-center gap-1.5 px-3 py-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-amber-400 transition">
+                    <i id="cloudSyncIcon" class="fa-solid fa-cloud"></i>
+                    <span id="cloudStatusText" class="text-[11px] text-slate-300">متصل بالدرايف</span>
+                </button>
+
+                <!-- حالة سيرفر الأوتوميشن المحلي -->
+                <div id="serverStatusBadge" class="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
+                    <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                    <span id="statusText" class="text-[11px] text-slate-300">فحص السيرفر...</span>
+                </div>
+
+                <!-- زرار تثبيت كـ Web App يظهر تلقائياً عند دعم المتصفح -->
+                <button id="btnInstallApp" onclick="installPWA()" class="hidden px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition items-center gap-1.5 shadow">
+                    <i class="fa-solid fa-download"></i> تثبيت التطبيق
+                </button>
             </div>
-            <button onclick="exportResultsToExcel()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-2 shadow">
-                <i class="fa-solid fa-file-excel"></i> تصدير التقرير
-            </button>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        <!-- العمود الأيمن: إدارة العملاء + إعدادات الجنسية + الإدخال -->
+    <!-- ========================================================================= -->
+    <!-- الصفحة 1: أتمتة نسك (Nusuk Automation) -->
+    <!-- ========================================================================= -->
+    <section id="pageAutomation" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- العمود الأيمن -->
         <div class="lg:col-span-4 space-y-6">
-
-            <!-- 1. بطاقة حفظ وإدارة إيميلات العملاء -->
+            <!-- 1. حسابات استلام OTP -->
             <div class="glass p-5 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-amber-400 flex items-center gap-2">
                         <i class="fa-solid fa-user-shield"></i> حسابات استلام الكود (OTP)
                     </h2>
-                    <span class="text-[11px] bg-amber-500/10 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/20">حفظ تلقائي</span>
+                    <span class="text-[11px] bg-amber-500/10 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/20">مزامنة سحابية</span>
                 </div>
 
-                <!-- قائمة العملاء المحفوظين -->
                 <div class="mb-3">
                     <label class="block text-xs text-slate-400 mb-1">اختر حساب عميل محفوظ:</label>
                     <div class="flex gap-2">
@@ -76,11 +98,10 @@
 
                 <hr class="border-slate-800 my-3">
 
-                <!-- حقول الإيميل والباسورد -->
                 <div class="space-y-3">
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">اسم المكتب / العميل (للحفظ):</label>
-                        <input id="profileName" type="text" placeholder="مثال: مكتب الهدى - حساب 1" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                        <input id="profileName" type="text" placeholder="مثال: طواف للسياحة" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
                     </div>
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">البريد الإلكتروني (Gmail):</label>
@@ -131,13 +152,12 @@
                 </div>
             </div>
 
-            <!-- 3. إضافة معتمرين (إكسل أو يدوي) -->
+            <!-- 3. إدخال بيانات المعتمرين -->
             <div class="glass p-5 rounded-2xl shadow-lg">
                 <h2 class="text-base font-bold text-amber-400 mb-3 flex items-center gap-2">
                     <i class="fa-solid fa-users-plus"></i> إدخال بيانات المعتمرين
                 </h2>
 
-                <!-- رفع ملف إكسل -->
                 <label class="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 hover:border-amber-400 rounded-xl cursor-pointer bg-slate-900/50 transition mb-4">
                     <div class="flex flex-col items-center justify-center pt-3 pb-3">
                         <i class="fa-solid fa-cloud-arrow-up text-amber-400 text-xl mb-1"></i>
@@ -147,26 +167,22 @@
                     <input id="excelFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)" />
                 </label>
 
-                <!-- إضافة فردي سريع -->
                 <div class="space-y-2 border-t border-slate-800 pt-3">
                     <p class="text-xs text-slate-400 font-semibold">أو إضافة معتمر يدوياً:</p>
                     <div class="grid grid-cols-2 gap-2">
                         <input id="manualPassport" type="text" placeholder="رقم الجواز" dir="ltr" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-left">
                         <input id="manualVisa" type="text" placeholder="رقم التأشيرة" dir="ltr" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-left">
                     </div>
-                    <input id="manualEmail" type="email" placeholder="إيميل الحساب (اتركه فارغاً لاستخدام إيميل العميل)" dir="ltr" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-left">
+                    <input id="manualEmail" type="email" placeholder="إيميل الحساب (اختياري)" dir="ltr" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-left">
                     <button onclick="addManualPilgrim()" class="w-full py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs transition">
                         <i class="fa-solid fa-plus"></i> إضافة للقائمة
                     </button>
                 </div>
             </div>
-
         </div>
 
-        <!-- العمود الأيسر: الإحصائيات + جدول الطابور والتشغيل -->
+        <!-- العمود الأيسر: الطابور والإحصائيات -->
         <div class="lg:col-span-8 space-y-6">
-
-            <!-- بطاقات الإحصائيات -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div class="glass p-4 rounded-2xl border-r-4 border-blue-500">
                     <p class="text-xs text-slate-400">إجمالي القائمة</p>
@@ -186,7 +202,6 @@
                 </div>
             </div>
 
-            <!-- شريط التحكم في الطابور -->
             <div class="glass p-4 rounded-2xl flex flex-wrap justify-between items-center gap-3">
                 <div class="flex items-center gap-2">
                     <button id="btnStartQueue" onclick="startQueueProcessing()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition flex items-center gap-2 shadow-lg">
@@ -197,9 +212,12 @@
                     </button>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="exportResultsToExcel()" class="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-bold transition">
+                        <i class="fa-solid fa-file-excel"></i> تصدير التقرير
+                    </button>
                     <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
-                        <i class="fa-solid fa-rotate-right"></i> إعادة محاولة الأخطاء
+                        <i class="fa-solid fa-rotate-right"></i> إعادة الأخطاء
                     </button>
                     <button onclick="clearPilgrimList()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-red-900/40 text-red-400 text-xs font-bold transition">
                         <i class="fa-solid fa-trash-can"></i> مسح القائمة
@@ -207,7 +225,6 @@
                 </div>
             </div>
 
-            <!-- جدول المعتمرين -->
             <div class="glass rounded-2xl overflow-hidden shadow-lg">
                 <div class="overflow-x-auto max-h-[520px]">
                     <table class="w-full text-right text-sm">
@@ -222,440 +239,312 @@
                                 <th class="py-3.5 px-4 text-center">إجراء</th>
                             </tr>
                         </thead>
-                        <tbody id="pilgrimsTableBody" class="divide-y divide-slate-800">
-                            <tr>
-                                <td colspan="7" class="py-12 text-center text-slate-500 text-xs">
-                                    لا توجد بيانات حالياً.. ارفع شيت الإكسل أو أضف معتمراً يدوياً للبدء
-                                </td>
-                            </tr>
-                        </tbody>
+                        <tbody id="pilgrimsTableBody" class="divide-y divide-slate-800"></tbody>
                     </table>
                 </div>
             </div>
-
         </div>
-    </main>
+    </section>
 
-    <!-- الكود البرمجي الكامل للواجهة -->
-    <script>
-        const API_BASE = "http://127.0.0.1:8000";
-        let pilgrimsList = [];
-        let isProcessing = false;
-        let stopRequested = false;
+    <!-- ========================================================================= -->
+    <!-- الصفحة 2: مواعيد المدينة والروضة + الكليندر والليبلز -->
+    <!-- ========================================================================= -->
+    <section id="pageCalendar" class="max-w-7xl mx-auto hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        // 1. فحص حالة السيرفر تلقائياً كل 3 ثواني
-        async function checkServerStatus() {
-            const dot = document.getElementById("statusDot");
-            const txt = document.getElementById("statusText");
-            const badge = document.getElementById("serverStatusBadge");
-            try {
-                const res = await fetch(`${API_BASE}/api/status`);
-                if (res.ok) {
-                    dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-                    txt.textContent = "السيرفر متصل وجاهز";
-                    txt.className = "text-emerald-400";
-                    badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
-                    return;
-                }
-            } catch (e) {}
-            dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
-            txt.textContent = "السيرفر غير متصل";
-            txt.className = "text-red-400";
-            badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold";
-        }
+            <!-- يمين: إضافة مجموعة جديدة + حاسبة أنسب ميعاد لحجز الروضة -->
+            <div class="lg:col-span-4 glass p-5 rounded-2xl shadow-lg space-y-4">
+                <h2 class="text-base font-bold text-amber-400 flex items-center gap-2">
+                    <i class="fa-solid fa-mosque"></i> إضافة مجموعة واقتراح ميعاد الروضة
+                </h2>
 
-        // 2. إدارة إعدادات الجنسية وتمييز الزرار المختار باللون الأصفر
-        function setNatPreset(countryText, optionVal) {
-            document.getElementById("natText").value = countryText;
-            document.getElementById("natOption").value = String(optionVal);
-            saveNatSettings();
-        }
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">العميل / شركة السياحة:</label>
+                        <select id="tripClientSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none"></select>
+                    </div>
 
-        function saveNatSettings() {
-            const text = document.getElementById("natText").value.trim();
-            const opt = document.getElementById("natOption").value;
-            localStorage.setItem("nusuk_nat_text", text);
-            localStorage.setItem("nusuk_nat_opt", opt);
-            highlightActiveNatButton(text, opt);
-        }
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">اسم / كود المجموعة:</label>
+                            <input id="tripGroupName" type="text" placeholder="مثال: HYT25 أو فوج 1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">العدد (المعتمرين):</label>
+                            <input id="tripCount" type="number" min="1" value="45" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-center font-bold text-amber-400">
+                        </div>
+                    </div>
 
-        function highlightActiveNatButton(text, opt) {
-            const btnThailand = document.getElementById("btnNatThailand");
-            const btnEgypt = document.getElementById("btnNatEgypt");
-            const btnMorocco = document.getElementById("btnNatMorocco");
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">دخول المدينة (من يوم):</label>
+                            <input id="tripArrivalDate" type="date" onchange="suggestBestRawdahSlot()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">خروج المدينة (إلى يوم):</label>
+                            <input id="tripDepartureDate" type="date" onchange="suggestBestRawdahSlot()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white">
+                        </div>
+                    </div>
 
-            [btnThailand, btnEgypt, btnMorocco].forEach(btn => btn.classList.remove("nat-btn-active"));
+                    <!-- صندوق الاقتراح الذكي لأنسب ميعاد للروضة -->
+                    <div id="rawdahSuggestionBox" class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-extrabold text-amber-400"><i class="fa-solid fa-wand-magic-sparkles ml-1"></i> أنسب موعد مقترح للروضة:</span>
+                            <span id="suggestedStayBadge" class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300">حدد التواريخ</span>
+                        </div>
+                        <p id="suggestedDateText" class="text-sm font-bold text-white">اختر تاريخ دخول وخروج المدينة أولاً</p>
+                        <p id="suggestedReasonText" class="text-[11px] text-slate-300 leading-relaxed"></p>
+                    </div>
 
-            if (text === "تايلاند" && String(opt) === "1") {
-                btnThailand.classList.add("nat-btn-active");
-            } else if (text === "مصر" && String(opt) === "2") {
-                btnEgypt.classList.add("nat-btn-active");
-            } else if (text === "المغرب" && String(opt) === "1") {
-                btnMorocco.classList.add("nat-btn-active");
-            }
-        }
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">تاريخ حجز الروضة المعتمد:</label>
+                            <input id="tripRawdahDate" type="date" class="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-2.5 py-2 text-xs text-amber-300 font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">حالة المجموعة (Label):</label>
+                            <select id="tripStatusSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs font-bold text-white">
+                                <option value="registering">🔵 جاري التسجيل</option>
+                                <option value="registered">🟡 تم التسجيل</option>
+                                <option value="booked">🟢 تم الحجز</option>
+                                <option value="visited">🟣 تمت الزيارة</option>
+                            </select>
+                        </div>
+                    </div>
 
-        function loadNatSettings() {
-            const savedText = localStorage.getItem("nusuk_nat_text") || "تايلاند";
-            const savedOpt = localStorage.getItem("nusuk_nat_opt") || "1";
-            document.getElementById("natText").value = savedText;
-            document.getElementById("natOption").value = savedOpt;
-            highlightActiveNatButton(savedText, savedOpt);
-        }
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">رفع ملف الكشف لفولدر العميل في Google Drive (اختياري):</label>
+                        <input id="tripDriveFile" type="file" class="w-full text-xs text-slate-400 file:ml-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-amber-400 hover:file:bg-slate-700">
+                    </div>
 
-        // 3. إدارة حسابات العملاء (Gmail + App Password)
-        function togglePassVisibility() {
-            const passInput = document.getElementById("clientPass");
-            const icon = document.getElementById("passEyeIcon");
-            if (passInput.type === "password") {
-                passInput.type = "text";
-                icon.className = "fa-solid fa-eye-slash";
-            } else {
-                passInput.type = "password";
-                icon.className = "fa-solid fa-eye";
-            }
-        }
+                    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer pt-1">
+                        <input id="tripAutoAddAccounting" type="checkbox" checked class="rounded bg-slate-900 border-slate-700 text-amber-500">
+                        <span>إضافة الكشف تلقائياً في حساب العميل المالي</span>
+                    </label>
 
-        function saveActiveCredentials() {
-            localStorage.setItem("nusuk_active_email", document.getElementById("clientEmail").value.trim());
-            localStorage.setItem("nusuk_active_pass", document.getElementById("clientPass").value.trim());
-        }
+                    <button id="btnSaveTrip" onclick="addNewTrip()" class="w-full py-2.5 rounded-xl gold-gradient text-slate-950 font-extrabold text-xs transition flex items-center justify-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-calendar-plus"></i> حفظ المجموعة في الكليندر والدرايف
+                    </button>
+                </div>
+            </div>
 
-        function getSavedProfiles() {
-            try {
-                return JSON.parse(localStorage.getItem("nusuk_saved_profiles") || "[]");
-            } catch {
-                return [];
-            }
-        }
+            <!-- يسار: الكليندر التفاعلي وفلتر الحالات -->
+            <div class="lg:col-span-8 space-y-6">
+                <!-- شريط الفلترة بالليبلز -->
+                <div class="glass p-4 rounded-2xl flex flex-wrap justify-between items-center gap-3">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button onclick="filterTripsByStatus('all')" id="filterBtn_all" class="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold transition">الكل</button>
+                        <button onclick="filterTripsByStatus('registering')" id="filterBtn_registering" class="px-3 py-1.5 rounded-lg status-registering text-xs font-bold transition">🔵 جاري التسجيل</button>
+                        <button onclick="filterTripsByStatus('registered')" id="filterBtn_registered" class="px-3 py-1.5 rounded-lg status-registered text-xs font-bold transition">🟡 تم التسجيل</button>
+                        <button onclick="filterTripsByStatus('booked')" id="filterBtn_booked" class="px-3 py-1.5 rounded-lg status-booked text-xs font-bold transition">🟢 تم الحجز</button>
+                        <button onclick="filterTripsByStatus('visited')" id="filterBtn_visited" class="px-3 py-1.5 rounded-lg status-visited text-xs font-bold transition">🟣 تمت الزيارة</button>
+                    </div>
 
-        function renderSavedProfiles() {
-            const select = document.getElementById("savedProfilesSelect");
-            const profiles = getSavedProfiles();
-            select.innerHTML = `<option value="">-- اختر حساباً محفوظاً (${profiles.length}) --</option>`;
-            profiles.forEach((p, idx) => {
-                const opt = document.createElement("option");
-                opt.value = idx;
-                opt.textContent = `${p.name} (${p.email})`;
-                select.appendChild(opt);
-            });
-        }
+                    <!-- التحكم في الشهر في الكليندر -->
+                    <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700">
+                        <button onclick="changeCalendarMonth(-1)" class="text-slate-400 hover:text-amber-400 px-1"><i class="fa-solid fa-chevron-right"></i></button>
+                        <span id="calendarMonthTitle" class="text-xs font-extrabold text-amber-400 min-w-[110px] text-center"></span>
+                        <button onclick="changeCalendarMonth(1)" class="text-slate-400 hover:text-amber-400 px-1"><i class="fa-solid fa-chevron-left"></i></button>
+                    </div>
+                </div>
 
-        function saveCurrentProfile() {
-            const name = document.getElementById("profileName").value.trim() || "حساب بدون اسم";
-            const email = document.getElementById("clientEmail").value.trim();
-            const pass = document.getElementById("clientPass").value.trim();
-            if (!email || !pass) {
-                alert("يرجى كتابة الإيميل وكلمة مرور التطبيقات أولاً!");
-                return;
-            }
-            const profiles = getSavedProfiles();
-            const existingIdx = profiles.findIndex(p => p.email === email);
-            if (existingIdx >= 0) {
-                profiles[existingIdx] = { name, email, pass };
-            } else {
-                profiles.push({ name, email, pass });
-            }
-            localStorage.setItem("nusuk_saved_profiles", JSON.stringify(profiles));
-            saveActiveCredentials();
-            renderSavedProfiles();
-            alert("تم حفظ الحساب بنجاح!");
-        }
+                <!-- شبكة الكليندر الشهري -->
+                <div class="glass p-4 rounded-2xl shadow-lg">
+                    <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400 mb-2 pb-2 border-b border-slate-800">
+                        <div>الأحد</div><div>الإثنين</div><div>الثلاثاء</div><div>الأربعاء</div><div>الخميس</div><div>الجمعة</div><div>السبت</div>
+                    </div>
+                    <div id="calendarGrid" class="grid grid-cols-7 gap-1.5"></div>
+                </div>
 
-        function loadSelectedProfile() {
-            const idx = document.getElementById("savedProfilesSelect").value;
-            if (idx === "") return;
-            const profiles = getSavedProfiles();
-            const p = profiles[idx];
-            if (p) {
-                document.getElementById("profileName").value = p.name;
-                document.getElementById("clientEmail").value = p.email;
-                document.getElementById("clientPass").value = p.pass;
-                saveActiveCredentials();
-            }
-        }
+                <!-- قائمة جميع المجموعات والمواعيد مع تغيير الليبل السريع -->
+                <div class="glass rounded-2xl overflow-hidden shadow-lg">
+                    <div class="p-4 bg-slate-900/60 border-b border-slate-800 flex justify-between items-center">
+                        <h3 class="text-sm font-bold text-amber-400"><i class="fa-solid fa-list-check ml-1"></i> جدول المجموعات وحالات الروضة</h3>
+                        <span id="tripsCountBadge" class="text-xs text-slate-400">0 مجموعة</span>
+                    </div>
+                    <div class="overflow-x-auto max-h-[400px]">
+                        <table class="w-full text-right text-xs">
+                            <thead class="bg-slate-900/90 text-slate-400 uppercase sticky top-0">
+                                <tr>
+                                    <th class="py-3 px-3">العميل</th>
+                                    <th class="py-3 px-3">المجموعة</th>
+                                    <th class="py-3 px-3">العدد</th>
+                                    <th class="py-3 px-3">فترة المدينة</th>
+                                    <th class="py-3 px-3">موعد الروضة</th>
+                                    <th class="py-3 px-3">الحالة (تغيير مباشر)</th>
+                                    <th class="py-3 px-3">ملف الدرايف</th>
+                                    <th class="py-3 px-3 text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tripsTableBody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-        function deleteSelectedProfile() {
-            const idx = document.getElementById("savedProfilesSelect").value;
-            if (idx === "") return;
-            const profiles = getSavedProfiles();
-            profiles.splice(idx, 1);
-            localStorage.setItem("nusuk_saved_profiles", JSON.stringify(profiles));
-            renderSavedProfiles();
-        }
+    <!-- ========================================================================= -->
+    <!-- الصفحة 3: الحسابات وكشوفات العملاء + Google Drive (مطابق لشيت الإكسل) -->
+    <!-- ========================================================================= -->
+    <section id="pageAccounting" class="max-w-7xl mx-auto hidden space-y-6">
 
-        // 4. قراءة الإكسل وإضافة المعتمرين
-        function extractFromRow(row, keys) {
-            for (const k of Object.keys(row)) {
-                const cleanK = k.trim().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").toLowerCase();
-                for (const sk of keys) {
-                    const cleanS = sk.trim().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").toLowerCase();
-                    if (cleanK === cleanS || cleanK.includes(cleanS)) {
-                        return String(row[k]).trim();
-                    }
-                }
-            }
-            return "";
-        }
+        <!-- شريط اختيار العميل أو إضافة عميل جديد -->
+        <div class="glass p-5 rounded-2xl shadow-lg flex flex-wrap justify-between items-center gap-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <label class="text-sm font-bold text-amber-400"><i class="fa-solid fa-building-user ml-1"></i> اختر العميل لعرض كشف حسابه:</label>
+                <select id="accClientSelect" onchange="renderSelectedClientAccounting()" class="bg-slate-900 border border-amber-500/50 rounded-xl px-4 py-2 text-sm font-bold text-white focus:outline-none"></select>
+                <button onclick="openNewClientModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold border border-slate-700 transition">
+                    <i class="fa-solid fa-user-plus"></i> + عميل جديد
+                </button>
+            </div>
 
-        function handleExcelUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: "array" });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="exportClientStatementExcel()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-2 shadow">
+                    <i class="fa-solid fa-file-excel"></i> تحميل كشف حساب العميل (Excel)
+                </button>
+                <button onclick="exportAllClientsMasterExcel()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition flex items-center gap-2 shadow">
+                    <i class="fa-solid fa-table"></i> تصدير الشيت المجمع لكل العملاء
+                </button>
+            </div>
+        </div>
 
-                rows.forEach(row => {
-                    const passport = extractFromRow(row, ["رقم الجواز", "الجواز", "passport", "وثيقة"]);
-                    const visa = extractFromRow(row, ["رقم التأشيرة", "التأشيرة", "الفيزا", "تاشيره", "visa"]);
-                    const email = extractFromRow(row, ["البريد", "الايميل", "إيميل", "email"]);
-                    if (passport || visa) {
-                        pilgrimsList.push({
-                            raw: row,
-                            passport: passport,
-                            visa: visa,
-                            email: email,
-                            otp: "-",
-                            status: "pending",
-                            message: "في الانتظار"
-                        });
-                    }
-                });
-                event.target.value = "";
-                savePilgrimsToStorage();
-                renderPilgrimsTable();
-            };
-            reader.readAsArrayBuffer(file);
-        }
+        <!-- ملخص الحساب المالي للعميل المحدد (نفس معادلات شيت الإكسل بالظبط) -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div class="glass p-4 rounded-2xl border-r-4 border-slate-400">
+                <p class="text-xs text-slate-400">سعر الفرد للعميل</p>
+                <div class="flex items-center gap-2 mt-1">
+                    <input id="accClientRate" type="number" onchange="updateClientRate()" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-lg font-extrabold text-amber-400 text-center">
+                    <span class="text-xs text-slate-400">ريال/جنيه</span>
+                </div>
+            </div>
+            <div class="glass p-4 rounded-2xl border-r-4 border-blue-500">
+                <p class="text-xs text-slate-400">إجمالي الأعداد</p>
+                <p id="accTotalCount" class="text-2xl font-extrabold text-white mt-1">0</p>
+            </div>
+            <div class="glass p-4 rounded-2xl border-r-4 border-amber-500">
+                <p class="text-xs text-slate-400">إجمالي الحساب</p>
+                <p id="accTotalAmount" class="text-2xl font-extrabold text-amber-400 mt-1">0</p>
+            </div>
+            <div class="glass p-4 rounded-2xl border-r-4 border-emerald-500">
+                <p class="text-xs text-slate-400">إجمالي المسدد (الدفعات)</p>
+                <p id="accTotalPaid" class="text-2xl font-extrabold text-emerald-400 mt-1">0</p>
+            </div>
+            <div class="glass p-4 rounded-2xl border-r-4 border-red-500">
+                <p class="text-xs text-slate-400">الباقي المستحق</p>
+                <p id="accRemaining" class="text-2xl font-extrabold text-red-400 mt-1">0</p>
+            </div>
+        </div>
 
-        function addManualPilgrim() {
-            const passport = document.getElementById("manualPassport").value.trim();
-            const visa = document.getElementById("manualVisa").value.trim();
-            const email = document.getElementById("manualEmail").value.trim();
-            if (!passport || !visa) {
-                alert("يرجى إدخال رقم الجواز ورقم التأشيرة!");
-                return;
-            }
-            pilgrimsList.push({
-                raw: { "رقم الجواز": passport, "رقم التأشيرة": visa, "البريد الإلكتروني": email },
-                passport,
-                visa,
-                email,
-                otp: "-",
-                status: "pending",
-                message: "في الانتظار"
-            });
-            document.getElementById("manualPassport").value = "";
-            document.getElementById("manualVisa").value = "";
-            document.getElementById("manualEmail").value = "";
-            savePilgrimsToStorage();
-            renderPilgrimsTable();
-        }
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- يمين: إضافة كشف حساب جديد + تسجيل دفعة مسددة + رفع ملف للدرايف -->
+            <div class="lg:col-span-4 space-y-6">
 
-        // 5. عرض الجدول والإحصائيات
-        function renderPilgrimsTable() {
-            const tbody = document.getElementById("pilgrimsTableBody");
-            const clientEmail = document.getElementById("clientEmail").value.trim();
+                <!-- إضافة سطر كشف في حساب العميل -->
+                <div class="glass p-5 rounded-2xl shadow-lg space-y-3">
+                    <h3 class="text-sm font-bold text-amber-400"><i class="fa-solid fa-plus-circle ml-1"></i> إضافة كشف جديد لحساب العميل</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">التاريخ:</label>
+                            <input id="newRosterDate" type="date" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">العدد:</label>
+                            <input id="newRosterCount" type="number" placeholder="مثال: 45" oninput="calcNewRosterPrice()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-amber-400">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">اسم/كود المجموعة (اختياري):</label>
+                            <input id="newRosterCode" type="text" placeholder="مثال: HYT18" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">السعر الإجمالي للكشف:</label>
+                            <input id="newRosterPrice" type="number" placeholder="يحسب تلقائياً" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-emerald-400">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">رفع ملف الكشف لـ Google Drive (اختياري):</label>
+                        <input id="newRosterFile" type="file" class="w-full text-xs text-slate-400 file:ml-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-amber-400">
+                    </div>
+                    <button id="btnAddRosterEntry" onclick="addRosterAccountingEntry()" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition shadow">
+                        <i class="fa-solid fa-check"></i> إدراج الكشف في الحساب
+                    </button>
+                </div>
 
-            document.getElementById("statTotal").textContent = pilgrimsList.length;
-            document.getElementById("statSuccess").textContent = pilgrimsList.filter(p => p.status === "completed").length;
-            document.getElementById("statAlready").textContent = pilgrimsList.filter(p => p.status === "already_registered").length;
-            document.getElementById("statError").textContent = pilgrimsList.filter(p => p.status === "error").length;
+                <!-- تسجيل دفعة مالية مسددة -->
+                <div class="glass p-5 rounded-2xl shadow-lg space-y-3">
+                    <h3 class="text-sm font-bold text-emerald-400"><i class="fa-solid fa-money-bill-wave ml-1"></i> تسجيل دفعة مسددة من العميل</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">المبلغ المسدد:</label>
+                            <input id="newPaymentAmount" type="number" placeholder="مثال: 4900" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-emerald-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">تاريخ الدفعة:</label>
+                            <input id="newPaymentDate" type="date" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white">
+                        </div>
+                    </div>
+                    <input id="newPaymentNote" type="text" placeholder="ملاحظة (مثال: تحويل بنكي / كاش)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs">
+                    <button onclick="addClientPayment()" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow">
+                        <i class="fa-solid fa-plus"></i> تسجيل الدفعة في السجل
+                    </button>
+                </div>
 
-            if (pilgrimsList.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-500 text-xs">لا توجد بيانات حالياً.. ارفع شيت الإكسل أو أضف معتمراً يدوياً للبدء</td></tr>`;
-                return;
-            }
+            </div>
 
-            tbody.innerHTML = pilgrimsList.map((p, idx) => {
-                let badge = `<span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs">في الانتظار</span>`;
-                if (p.status === "processing") {
-                    badge = `<span class="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري التسجيل...</span>`;
-                } else if (p.status === "completed") {
-                    badge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs"><i class="fa-solid fa-check ml-1"></i> تم التسجيل</span>`;
-                } else if (p.status === "already_registered") {
-                    badge = `<span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs"><i class="fa-solid fa-triangle-exclamation ml-1"></i> مسجل مسبقاً</span>`;
-                } else if (p.status === "error") {
-                    badge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 text-xs"><i class="fa-solid fa-xmark ml-1"></i> ${p.message || "فشل"}</span>`;
-                }
+            <!-- يسار: جدول كشوفات العميل (مع التلوين بالأخضر للمسدد) + سجل الدفعات -->
+            <div class="lg:col-span-8 space-y-6">
+                <div class="glass rounded-2xl overflow-hidden shadow-lg">
+                    <div class="p-4 bg-slate-900/60 border-b border-slate-800 flex justify-between items-center">
+                        <h3 class="text-sm font-bold text-amber-400">
+                            <i class="fa-solid fa-table-list ml-1"></i> سجل كشوفات العميل (اضغط على علامة ✅ لتلوين الكشف بالأخضر كمسدد)
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto max-h-[420px]">
+                        <table class="w-full text-right text-xs">
+                            <thead class="bg-slate-900/90 text-slate-400 uppercase sticky top-0">
+                                <tr>
+                                    <th class="py-3 px-4">التاريخ</th>
+                                    <th class="py-3 px-4">الكود / البيان</th>
+                                    <th class="py-3 px-4">العدد</th>
+                                    <th class="py-3 px-4">السعر</th>
+                                    <th class="py-3 px-4">ملف الدرايف</th>
+                                    <th class="py-3 px-4 text-center">خالص (أخضر)</th>
+                                    <th class="py-3 px-4 text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientRostersTableBody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
 
-                return `
-                    <tr class="hover:bg-slate-800/40 transition">
-                        <td class="py-3 px-4 font-bold text-slate-400">${idx + 1}</td>
-                        <td class="py-3 px-4 font-mono text-amber-300" dir="ltr">${p.passport}</td>
-                        <td class="py-3 px-4 font-mono text-slate-200" dir="ltr">${p.visa}</td>
-                        <td class="py-3 px-4 text-xs text-slate-300" dir="ltr">${p.email || clientEmail || "-"}</td>
-                        <td class="py-3 px-4 font-mono font-bold text-emerald-400">${p.otp || "-"}</td>
-                        <td class="py-3 px-4">${badge}</td>
-                        <td class="py-3 px-4 text-center">
-                            <div class="flex items-center justify-center gap-1">
-                                <button onclick="processSinglePilgrim(${idx})" title="تشغيل هذا المعتمر" class="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white transition text-xs">
-                                    <i class="fa-solid fa-play"></i>
-                                </button>
-                                <button onclick="removePilgrim(${idx})" title="حذف" class="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition text-xs">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join("");
-        }
+                <!-- جدول سجل الدفعات المسددة -->
+                <div class="glass rounded-2xl overflow-hidden shadow-lg">
+                    <div class="p-3.5 bg-slate-900/60 border-b border-slate-800 flex justify-between items-center">
+                        <h3 class="text-xs font-bold text-emerald-400"><i class="fa-solid fa-receipt ml-1"></i> سجل الدفعات المسددة</h3>
+                    </div>
+                    <div class="overflow-x-auto max-h-[220px]">
+                        <table class="w-full text-right text-xs">
+                            <thead class="bg-slate-900/90 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="py-2.5 px-4">التاريخ</th>
+                                    <th class="py-2.5 px-4">المبلغ المسدد</th>
+                                    <th class="py-2.5 px-4">ملاحظات</th>
+                                    <th class="py-2.5 px-4 text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientPaymentsTableBody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-        function removePilgrim(idx) {
-            pilgrimsList.splice(idx, 1);
-            savePilgrimsToStorage();
-            renderPilgrimsTable();
-        }
-
-        function clearPilgrimList() {
-            if (!confirm("هل أنت متأكد من مسح القائمة بالكامل؟")) return;
-            pilgrimsList = [];
-            savePilgrimsToStorage();
-            renderPilgrimsTable();
-        }
-
-        function retryFailedPilgrims() {
-            pilgrimsList.forEach(p => {
-                if (p.status === "error") {
-                    p.status = "pending";
-                    p.message = "في الانتظار";
-                }
-            });
-            savePilgrimsToStorage();
-            renderPilgrimsTable();
-        }
-
-        function savePilgrimsToStorage() {
-            localStorage.setItem("nusuk_pilgrims_queue", JSON.stringify(pilgrimsList));
-        }
-
-        // 6. إرسال المعتمر إلى السيرفر (مع إرسال الجنسية وترتيب الخيار)
-        async function processSinglePilgrim(idx) {
-            const clientEmail = document.getElementById("clientEmail").value.trim();
-            const clientPass = document.getElementById("clientPass").value.trim();
-            if (!clientEmail || !clientPass) {
-                alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات (16 حرف) أولاً!");
-                return false;
-            }
-
-            const p = pilgrimsList[idx];
-            p.status = "processing";
-            renderPilgrimsTable();
-
-            const natText = document.getElementById("natText").value.trim() || "تايلاند";
-            const natOpt = document.getElementById("natOption").value;
-            const natY = natOpt === "2" ? 275 : 195;
-
-            try {
-                const res = await fetch(`${API_BASE}/api/register`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        client_email: clientEmail,
-                        client_pass: clientPass,
-                        nationality: natText,
-                        nationality_y: natY,
-                        pilgrim: {
-                            ...p.raw,
-                            "رقم الجواز": p.passport,
-                            "رقم التأشيرة": p.visa,
-                            "email": p.email || clientEmail
-                        }
-                    })
-                });
-                const data = await res.json();
-                if (data.status === "completed" || data.success) {
-                    p.status = "completed";
-                    p.otp = data.otp || p.otp;
-                    p.message = "تم التسجيل بنجاح";
-                } else if (data.status === "already_registered") {
-                    p.status = "already_registered";
-                    p.message = "مسجل مسبقاً";
-                } else {
-                    p.status = "error";
-                    p.message = data.error || data.message || "خطأ أثناء التنفيذ";
-                }
-            } catch (err) {
-                p.status = "error";
-                p.message = "تعذر الاتصال بالسيرفر";
-            }
-
-            savePilgrimsToStorage();
-            renderPilgrimsTable();
-            return true;
-        }
-
-        async function startQueueProcessing() {
-            if (isProcessing) return;
-            const clientEmail = document.getElementById("clientEmail").value.trim();
-            const clientPass = document.getElementById("clientPass").value.trim();
-            if (!clientEmail || !clientPass) {
-                alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات أولاً!");
-                return;
-            }
-
-            isProcessing = true;
-            stopRequested = false;
-            document.getElementById("btnStartQueue").disabled = true;
-            document.getElementById("btnStopQueue").disabled = false;
-
-            for (let i = 0; i < pilgrimsList.length; i++) {
-                if (stopRequested) break;
-                if (pilgrimsList[i].status === "pending") {
-                    await processSinglePilgrim(i);
-                }
-            }
-
-            isProcessing = false;
-            document.getElementById("btnStartQueue").disabled = false;
-            document.getElementById("btnStopQueue").disabled = true;
-        }
-
-        function stopQueueProcessing() {
-            stopRequested = true;
-        }
-
-        // 7. تصدير النتائج إلى ملف Excel
-        function exportResultsToExcel() {
-            if (pilgrimsList.length === 0) {
-                alert("لا توجد بيانات لتصديرها!");
-                return;
-            }
-            const exportData = pilgrimsList.map((p, i) => ({
-                "#": i + 1,
-                "رقم الجواز": p.passport,
-                "رقم التأشيرة": p.visa,
-                "الإيميل": p.email || document.getElementById("clientEmail").value.trim(),
-                "كود OTP": p.otp,
-                "الحالة": p.message
-            }));
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "تقرير نسك");
-            XLSX.writeFile(wb, `Nusuk_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
-        }
-
-        // تهيئة الصفحة عند الفتح
-        window.addEventListener("DOMContentLoaded", () => {
-            document.getElementById("clientEmail").value = localStorage.getItem("nusuk_active_email") || "";
-            document.getElementById("clientPass").value = localStorage.getItem("nusuk_active_pass") || "";
-            renderSavedProfiles();
-            loadNatSettings();
-
-            try {
-                pilgrimsList = JSON.parse(localStorage.getItem("nusuk_pilgrims_queue") || "[]");
-            } catch {
-                pilgrimsList = [];
-            }
-            renderPilgrimsTable();
-
-            checkServerStatus();
-            setInterval(checkServerStatus, 3000);
-        });
-    </script>
+    <!-- ربط ملفات الـ JavaScript المنفصلة بالترتيب -->
+    <script src="./js/cloud-api.js"></script>
+    <script src="./js/planner-accounting.js"></script>
+    <script src="./js/automation.js"></script>
 </body>
 </html>
