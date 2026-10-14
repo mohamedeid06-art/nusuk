@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- نفس التدرج الذهبي بتاع الهيدر في موقعك -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#eab308" />
+      <stop offset="50%" stop-color="#d4af37" />
+      <stop offset="100%" stop-color="#a16207" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- الخلفية الذهبية بحواف ناعمة زي أيقونات سامسونج وأندرويد -->
+  <rect width="512" height="512" rx="115" fill="url(#goldGrad)" />
+
+  <!-- أيقونة الكعبة المشرفة (FontAwesome Style) باللون الكحلي الغامق -->
+  <g filter="url(#shadow)" fill="#0f172a">
+    <!-- الجزء العلوي من الكعبة -->
+    <path d="M256 96 L96 166 L96 226 L256 162 L416 226 L416 166 Z" />
+    
+    <!-- شريط الكسوة المفرغ (يظهر الذهبي من تحته) ثم جسم الكعبة السفلي -->
+    <path d="M96 258 L96 376 L256 426 L416 376 L416 258 L256 194 Z M200 280 L235 268 L235 355 L200 367 Z" />
+  </g>
+</svg>
