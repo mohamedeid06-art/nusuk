@@ -7,7 +7,7 @@ let pilgrimsList = [];
 let isProcessing = false;
 let stopRequested = false;
 
-// 1. فحص حالة سيرفر البايثون المحلي تلقائياً كل 3 ثواني
+// 1. فحص حالة سيرفر البايثون المحلي وحالة المحاكي تلقائياً كل 3 ثواني
 async function checkServerStatus() {
     const dot = document.getElementById("statusDot");
     const txt = document.getElementById("statusText");
@@ -17,8 +17,13 @@ async function checkServerStatus() {
     try {
         const res = await fetch(`${API_BASE}/api/status`);
         if (res.ok) {
+            const data = await res.json().catch(() => ({}));
             dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-            txt.textContent = "السيرفر متصل";
+            if (data.device_connected) {
+                txt.textContent = "السيرفر متصل (المحاكي جاهز)";
+            } else {
+                txt.textContent = "السيرفر متصل (بانتظار المحاكي)";
+            }
             txt.className = "text-[11px] text-emerald-400 font-bold";
             badge.className = "flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
             return;
