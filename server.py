@@ -1,97 +1,139 @@
 import time
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel
 import uiautomator2 as u2
 
-app = FastAPI()
+app = FastAPI(title="Nusuk ERP & Automation Pro Server")
 
-# السماح للواجهة بالاتصال بالسيرفر
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ميدلوير شامل لدعم CORS و Private Network Access لجميع المتصفحات (بما فيها Chrome عبر HTTPS / GitHub Pages)
+@app.middleware("http")
+async def cors_and_pna_middleware(request: Request, call_next):
+    # معالجة طلب الفحص المسبق Preflight OPTIONS
+    if request.method == "OPTIONS":
+        response = Response(status_code=204)
+    else:
+        response = await call_next(request)
 
-# الاتصال بمحاكي LDPlayer
-d = u2.connect()
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
 
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    # دعم Private Network Access الصريح لحل حظر المتصفحات للشبكة المحلية
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    response.headers["Access-Control-Max-Age"] = "86400"
+    return response
 
-class Pilgrim(BaseModel):
-    الاسم: str = ""
-    البريد_الإلكتروني: str = ""
-    الباسورد: str = ""
-    رقم_الجواز: str = ""
-    رقم_التأشيرة: str = ""
+# الاتصال بمحاكي LDPlayer بأمان دون تعطيل السيرفر في حال تأخر تشغيل المحاكي
+d = None
 
+def get_device():
+    global d
+    if d is not None:
+        return d
+    try:
+        d = u2.connect()
+        return d
+    except Exception as e:
+        print(f"⚠️ تنبيه: محاكي LDPlayer غير متصل حالياً: {e}")
+        return None
 
 def fill_field(index, value, offset_y=45):
-    label = d(className="android.widget.TextView")[index]
+    device = get_device()
+    if not device:
+        raise RuntimeError("محاكي LDPlayer غير متصل! يرجى تشغيل المحاكي والتأكد من فتح تطبيق نسك.")
+    label = device(className="android.widget.TextView")[index]
     b = label.info["bounds"]
-    d.click(b["left"] + 50, b["bottom"] + offset_y)
-    d.clear_text()
-    d.send_keys(str(value))
+    device.click(b["left"] + 50, b["bottom"] + offset_y)
+    device.clear_text()
+    device.send_keys(str(value))
 
+# نقطة فحص حالة السيرفر للتأكد من اتصاله مع الواجهة
+@app.get("/api/status")
+@app.head("/api/status")
+@app.options("/api/status")
+def check_status():
+    device = get_device()
+    return {
+        "status": "ready",
+        "online": True,
+        "device_connected": device is not None,
+        "message": "السيرفر متصل وجاهز لاستقبال طلبات الأتمتة"
+    }
+
+@app.get("/")
+def home():
+    return {
+        "status": "online",
+        "app": "Nusuk ERP & Automation Pro Local Server",
+        "version": "2.0"
+    }
 
 @app.post("/api/register")
-def register(p: dict):
-    # تطابق مع أسماء الأعمدة في الإكسيل
-    name = p.get("الاسم") or p.get("Name")
-    email = p.get("البريد الإلكتروني") or p.get("Email")
-    password = p.get("الباسورد") or p.get("Password") or "Msamy2006**"
-    passport = p.get("رقم الجواز") or p.get("Passport")
-    visa = p.get("رقم التأشيرة") or p.get("Visa")
+def register(data: dict):
+    # دعم البيانات المباشرة أو المغلفة داخل كائن pilgrim
+    p = data.get("pilgrim", data)
+    client_email = data.get("client_email") or ""
+    client_pass = data.get("client_pass") or ""
+    nationality = data.get("nationality") or "تايلاند"
+    nationality_y = data.get("nationality_y", 195)
+
+    name = p.get("الاسم") or p.get("Name") or ""
+    email = p.get("البريد الإلكتروني") or p.get("Email") or p.get("email") or client_email
+    password = p.get("الباسورد") or p.get("Password") or client_pass or "Msamy2006**"
+    passport = p.get("رقم الجواز") or p.get("Passport") or p.get("passport") or ""
+    visa = p.get("رقم التأشيرة") or p.get("Visa") or p.get("visa") or ""
+
+    device = get_device()
+    if not device:
+        return {"success": False, "status": "error", "error": "محاكي LDPlayer غير متصل! يرجى فتح المحاكي أولاً."}
 
     try:
         # 1. شاشة إنشاء الحساب
         fill_field(2, name)
         fill_field(3, email)
         fill_field(4, password)
-        d(className="android.widget.TextView")[6].click()  # زر أنشئ حسابك
+        device(className="android.widget.TextView")[6].click()  # زر أنشئ حسابك
         time.sleep(2)
 
         # 2. خطوة الـ OTP
-        # هنا التطبيق بينتظر الـ OTP أو إدخاله التلقائي
         time.sleep(5)
 
         # 3. الشاشة الرئيسية: الضغط على الروضة
-        d(text="الروضة").click()
+        device(text="الروضة").click()
         time.sleep(1)
 
         # 4. بوب أب: أكمل الملف الشخصي
-        d(text="أكمل الملف الشخصي").click()
+        device(text="أكمل الملف الشخصي").click()
         time.sleep(1)
 
         # 5. نوع الهوية: زائر دولي
-        d(textContains="زائر دولي").click()
+        device(textContains="زائر دولي").click()
         time.sleep(1)
 
-        # 6. شاشة استكمال البيانات: الجنسية مصر، الجواز، والتأشيرة
-        # اختيار الجنسية (مصر)
-        d(text="الجنسية").click()
+        # 6. شاشة استكمال البيانات: الجنسية، الجواز، والتأشيرة
+        device(text="الجنسية").click()
         time.sleep(0.5)
-        d.send_keys("مصر")
-        d(text="مصر").click()
+        device.send_keys(nationality)
+        device(text=nationality).click()
 
-        # كتابة الجواز والتأشيرة
-        d(textContains="جواز السفر").click()
-        d.send_keys(passport)
+        device(textContains="جواز السفر").click()
+        device.send_keys(passport)
 
-        d(textContains="رقم التأشيرة").click()
-        d.send_keys(visa)
+        device(textContains="رقم التأشيرة").click()
+        device.send_keys(visa)
 
-        # زر تحقق من حسابك
-        d(text="تحقّق من حسابك").click()
+        device(text="تحقّق من حسابك").click()
         time.sleep(2)
 
-        return {"success": True}
+        return {"success": True, "status": "completed"}
     except Exception as e:
-        print(f"Error: {e}")
-        return {"success": False, "error": str(e)}
-
+        print(f"Error during registration: {e}")
+        return {"success": False, "status": "error", "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="127.0.0.1", port=8000)

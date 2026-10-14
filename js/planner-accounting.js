@@ -131,21 +131,40 @@ const INITIAL_EXCEL_PAYMENTS = [
     {"id": "p18", "clientId": "c15", "date": "16/8/2026", "amount": 1950, "note": "دفعة مسجلة من الشيت"}
 ];
 
+window.ERP_DB = window.ERP_DB || {
+    clients: [],
+    trips: [],
+    rosters: [],
+    payments: [],
+    profiles: []
+};
+
 let currentCalendarDate = new Date();
 let activeTripStatusFilter = "all";
 
 // دمج بيانات الشيت الأصلية في قاعدة البيانات إذا لم تكن محملة بعد
 function ensureInitialExcelDataLoaded() {
-    if (!window.ERP_DB.clients || window.ERP_DB.clients.length < 10) {
+    if (!window.ERP_DB) {
+        window.ERP_DB = { clients: [], trips: [], rosters: [], payments: [], profiles: [] };
+    }
+    if (!Array.isArray(window.ERP_DB.clients) || window.ERP_DB.clients.length < 10) {
         window.ERP_DB.clients = [...INITIAL_EXCEL_CLIENTS];
     }
-    if (!window.ERP_DB.rosters || window.ERP_DB.rosters.length === 0) {
+    if (!Array.isArray(window.ERP_DB.rosters) || window.ERP_DB.rosters.length === 0) {
         window.ERP_DB.rosters = [...INITIAL_EXCEL_ROSTERS];
     }
-    if (!window.ERP_DB.payments || window.ERP_DB.payments.length === 0) {
+    if (!Array.isArray(window.ERP_DB.payments) || window.ERP_DB.payments.length === 0) {
         window.ERP_DB.payments = [...INITIAL_EXCEL_PAYMENTS];
     }
-    saveLocalDatabase();
+    if (!Array.isArray(window.ERP_DB.trips)) {
+        window.ERP_DB.trips = [];
+    }
+    if (!Array.isArray(window.ERP_DB.profiles)) {
+        window.ERP_DB.profiles = [];
+    }
+    if (typeof saveLocalDatabase === "function") {
+        saveLocalDatabase();
+    }
 }
 
 // تحديث جميع القوائم والجداول في الصفحات
@@ -734,3 +753,32 @@ function exportAllClientsMasterExcel() {
 function renderMasterSummaryTable() {
     // يتم تحديث الإجماليات تلقائياً
 }
+
+// =========================================================================
+// ربط جميع الدوال صراحة بـ window لضمان عمل onclick في HTML بدون أي أخطاء
+// =========================================================================
+window.refreshAllViews = refreshAllViews;
+window.ensureInitialExcelDataLoaded = ensureInitialExcelDataLoaded;
+window.populateClientSelects = populateClientSelects;
+window.suggestBestRawdahSlot = suggestBestRawdahSlot;
+window.addNewTrip = addNewTrip;
+window.changeCalendarMonth = changeCalendarMonth;
+window.filterTripsByStatus = filterTripsByStatus;
+window.getStatusBadgeInfo = getStatusBadgeInfo;
+window.renderCalendarGrid = renderCalendarGrid;
+window.renderTripsTable = renderTripsTable;
+window.updateTripStatus = updateTripStatus;
+window.deleteTrip = deleteTrip;
+window.renderSelectedClientAccounting = renderSelectedClientAccounting;
+window.calcNewRosterPrice = calcNewRosterPrice;
+window.updateClientRate = updateClientRate;
+window.openNewClientModal = openNewClientModal;
+window.addRosterAccountingEntry = addRosterAccountingEntry;
+window.toggleRosterPaidGreen = toggleRosterPaidGreen;
+window.deleteRosterEntry = deleteRosterEntry;
+window.addClientPayment = addClientPayment;
+window.deletePaymentEntry = deletePaymentEntry;
+window.exportClientStatementExcel = exportClientStatementExcel;
+window.exportAllClientsMasterExcel = exportAllClientsMasterExcel;
+window.renderMasterSummaryTable = renderMasterSummaryTable;
+

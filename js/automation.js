@@ -419,27 +419,135 @@ function exportResultsToExcel() {
     XLSX.writeFile(wb, `Nusuk_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-// 8. تهيئة النظام بالكامل عند فتح التطبيق من أي جهاز
-window.addEventListener("DOMContentLoaded", async () => {
-    loadLocalDatabase();
-    if (typeof refreshAllViews === "function") refreshAllViews();
+// =========================================================================
+// 8. التنقل بين الصفحات الثلاث وتثبيت الـ PWA
+// =========================================================================
+function switchPage(pageName) {
+    const pageAutomation = document.getElementById("pageAutomation");
+    const pageCalendar = document.getElementById("pageCalendar");
+    const pageAccounting = document.getElementById("pageAccounting");
 
-    document.getElementById("clientEmail").value = localStorage.getItem("nusuk_active_email") || "";
-    document.getElementById("clientPass").value = localStorage.getItem("nusuk_active_pass") || "";
-    renderSavedProfiles();
-    loadNatSettings();
+    const tabBtnAutomation = document.getElementById("tabBtnAutomation");
+    const tabBtnCalendar = document.getElementById("tabBtnCalendar");
+    const tabBtnAccounting = document.getElementById("tabBtnAccounting");
 
-    try {
-        pilgrimsList = JSON.parse(localStorage.getItem("nusuk_pilgrims_queue") || "[]");
-    } catch {
-        pilgrimsList = [];
+    if (pageAutomation) pageAutomation.classList.add("hidden");
+    if (pageCalendar) pageCalendar.classList.add("hidden");
+    if (pageAccounting) pageAccounting.classList.add("hidden");
+
+    [tabBtnAutomation, tabBtnCalendar, tabBtnAccounting].forEach(btn => {
+        if (btn) {
+            btn.classList.remove("nav-tab-active");
+            btn.classList.add("text-slate-300");
+        }
+    });
+
+    if (pageName === "automation") {
+        if (pageAutomation) pageAutomation.classList.remove("hidden");
+        if (tabBtnAutomation) {
+            tabBtnAutomation.classList.add("nav-tab-active");
+            tabBtnAutomation.classList.remove("text-slate-300");
+        }
+    } else if (pageName === "calendar") {
+        if (pageCalendar) pageCalendar.classList.remove("hidden");
+        if (tabBtnCalendar) {
+            tabBtnCalendar.classList.add("nav-tab-active");
+            tabBtnCalendar.classList.remove("text-slate-300");
+        }
+        if (typeof window.renderCalendarGrid === "function") window.renderCalendarGrid();
+        if (typeof window.renderTripsTable === "function") window.renderTripsTable();
+    } else if (pageName === "accounting") {
+        if (pageAccounting) pageAccounting.classList.remove("hidden");
+        if (tabBtnAccounting) {
+            tabBtnAccounting.classList.add("nav-tab-active");
+            tabBtnAccounting.classList.remove("text-slate-300");
+        }
+        if (typeof window.renderSelectedClientAccounting === "function") window.renderSelectedClientAccounting();
     }
-    renderPilgrimsTable();
+}
 
-    // فحص سيرفر البايثون المحلي
-    checkServerStatus();
-    setInterval(checkServerStatus, 3000);
+let deferredPrompt = null;
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const btn = document.getElementById("btnInstallApp");
+        if (btn) btn.classList.remove("hidden");
+    });
+}
 
-    // مزامنة تلقائية مع Google Drive عند الفتح
-    await syncFromCloud(false);
-});
+function installPWA() {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+            deferredPrompt = null;
+            const btn = document.getElementById("btnInstallApp");
+            if (btn) btn.classList.add("hidden");
+        });
+    } else {
+        alert("تطبيق الويب مثبت بالفعل أو يمكنك تثبيته مباشرة من شريط خيارات المتصفح.");
+    }
+}
+
+// 9. تهيئة النظام بالكامل عند فتح التطبيق من أي جهاز
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("DOMContentLoaded", async () => {
+        if (typeof window.loadLocalDatabase === "function") window.loadLocalDatabase();
+        if (typeof window.refreshAllViews === "function") window.refreshAllViews();
+
+        const clientEmail = document.getElementById("clientEmail");
+        const clientPass = document.getElementById("clientPass");
+        if (clientEmail) clientEmail.value = localStorage.getItem("nusuk_active_email") || "";
+        if (clientPass) clientPass.value = localStorage.getItem("nusuk_active_pass") || "";
+
+        renderSavedProfiles();
+        loadNatSettings();
+
+        try {
+            pilgrimsList = JSON.parse(localStorage.getItem("nusuk_pilgrims_queue") || "[]");
+        } catch {
+            pilgrimsList = [];
+        }
+        renderPilgrimsTable();
+
+        // فحص سيرفر البايثون المحلي
+        checkServerStatus();
+        setInterval(checkServerStatus, 3000);
+
+        // مزامنة تلقائية مع Google Drive عند الفتح
+        if (typeof window.syncFromCloud === "function") {
+            await window.syncFromCloud(false);
+        }
+    });
+}
+
+// =========================================================================
+// ربط جميع الدوال صراحة بـ window لضمان عمل onclick في HTML بدون أي أخطاء
+// =========================================================================
+window.checkServerStatus = checkServerStatus;
+window.setNatPreset = setNatPreset;
+window.saveNatSettings = saveNatSettings;
+window.highlightActiveNatButton = highlightActiveNatButton;
+window.loadNatSettings = loadNatSettings;
+window.togglePassVisibility = togglePassVisibility;
+window.saveActiveCredentials = saveActiveCredentials;
+window.getSavedProfiles = getSavedProfiles;
+window.renderSavedProfiles = renderSavedProfiles;
+window.saveCurrentProfile = saveCurrentProfile;
+window.loadSelectedProfile = loadSelectedProfile;
+window.deleteSelectedProfile = deleteSelectedProfile;
+window.extractFromRow = extractFromRow;
+window.handleExcelUpload = handleExcelUpload;
+window.addManualPilgrim = addManualPilgrim;
+window.renderPilgrimsTable = renderPilgrimsTable;
+window.removePilgrim = removePilgrim;
+window.clearPilgrimList = clearPilgrimList;
+window.retryFailedPilgrims = retryFailedPilgrims;
+window.savePilgrimsToStorage = savePilgrimsToStorage;
+window.processSinglePilgrim = processSinglePilgrim;
+window.startQueueProcessing = startQueueProcessing;
+window.stopQueueProcessing = stopQueueProcessing;
+window.exportResultsToExcel = exportResultsToExcel;
+window.switchPage = switchPage;
+window.installPWA = installPWA;
+

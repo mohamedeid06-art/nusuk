@@ -546,5 +546,17 @@
     <script src="./js/cloud-api.js"></script>
     <script src="./js/planner-accounting.js"></script>
     <script src="./js/automation.js"></script>
+
+    <!-- تسجيل Service Worker لعمل التطبيق PWA والتحديث التلقائي للكاش -->
+    <script>
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", () => {
+                navigator.serviceWorker.register("./sw.js").catch(err => {
+                    console.log("Service Worker note:", err);
+                });
+            });
+        }
+    </script>
 </body>
 </html>
+
