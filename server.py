@@ -58,30 +58,16 @@ async def cors_and_pna_middleware(request: Request, call_next):
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
     response.headers["Access-Control-Allow-Headers"] = "*"
-    # دعم Private Network Access الصريح لحل حظر المتصفحات للشبكة المحلية
     response.headers["Access-Control-Allow-Private-Network"] = "true"
     response.headers["Access-Control-Max-Age"] = "86400"
     return response
 
-# 3. قائمة البورتات الشائعة لمختلف المحاكيات (LDPlayer, BlueStacks, Nox, MEmu, MuMu)
-EMULATOR_PORTS = [
-    5555,   # LDPlayer الافتراضي / BlueStacks / MEmu
-    5554,   # المحاكي القياسي Instance 0
-    5556,   # المحاكي القياسي Instance 1
-    5557,   # LDPlayer / BlueStacks 64-bit
-    5558,   # المحاكي القياسي Instance 2
-    62001,  # NoxPlayer الافتراضي
-    62025,  # NoxPlayer Multi-Instance 1
-    21503,  # MEmu Player
-    7555,   # MuMu Player
-    16384,  # MuMu Player 12
-]
-
+# 3. إدارة اتصال المحاكي بمرونة وأمان بدون تعطيل السيرفر
+EMULATOR_PORTS = [5557, 5555, 5554, 5556, 5558, 62001, 62025, 21503, 7555, 16384]
 d = None
 device_lock = threading.Lock()
 
-def is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.12) -> bool:
-    """فحص سريع بمهلة 120ms لمعرفة هل بورت المحاكي مفتوح محلياً أم لا"""
+def is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.15) -> bool:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
@@ -90,43 +76,51 @@ def is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.12) -> b
         return False
 
 def is_device_alive(device) -> bool:
-    """فحص هل الاتصال بالمحاكي ما زال حياً ويستجيب للأوامر"""
     if device is None:
         return False
     try:
-        # فحص سريع لخاصية serial أو info
         return bool(device.serial and device.info and device.info.get("screenOn") is not None)
     except Exception:
         return False
 
 def connect_to_any_emulator(force: bool = False):
     """
-    اكتشاف والاتصال التلقائي بأي محاكي متصل ومفتوح عبر ADB:
-    - يبحث أولاً في قائمة الأجهزة المكتشفة في adb devices
-    - إذا لم يجد أجهزة، يفحص بورتات المحاكيات النشطة على 127.0.0.1 ويتصل بها تلقائياً
-    - يختار السيريال الصحيح لتجنب خطأ (more than one device/emulator)
+    الاتصال المرن بأي محاكي متاح:
+    1. تجربة 127.0.0.1:5557
+    2. تجربة 127.0.0.1:5555 أو البورتات المفتوحة
+    3. تجربة u2.connect() لجلب أي جهاز متصل تلقائياً
+    4. فحص adb devices والاتصال بأول جهاز متاح
     """
     global d
     with device_lock:
         if not force and is_device_alive(d):
             return d
 
-        adb = adbutils.adb
+        # محاولة 1: البورت المفضل 5557
+        if is_port_open(5557):
+            try:
+                new_dev = u2.connect("127.0.0.1:5557")
+                if is_device_alive(new_dev):
+                    d = new_dev
+                    print(f"[OK] Connected to emulator: [127.0.0.1:5557]")
+                    return d
+            except Exception:
+                pass
 
-        # 1. فحص الأجهزة المتصلة حالياً في ADB
+        # محاولة 2: فحص أجهزة ADB المتصلة حالياً
+        adb = adbutils.adb
         online_devices = []
         try:
             online_devices = [dev for dev in adb.device_list() if dev.get_state() == "device"]
         except Exception as e:
-            print(f"[WARN] adb.device_list() error: {e}")
+            print(f"[WARN] adb.device_list() check: {e}")
 
-        # 2. إذا لم تكن هناك أجهزة نشطة، مسح سريع للبورتات الشائعة والاتصال بها
+        # محاولة 3: فحص البورتات الشائعة وربطها بـ ADB إذا لم تكن هناك أجهزة نشطة
         if not online_devices:
             for port in EMULATOR_PORTS:
                 if is_port_open(port):
                     try:
-                        res = adb.connect(f"127.0.0.1:{port}", timeout=1.0)
-                        print(f"[ADB] Attempting connection to 127.0.0.1:{port} -> {res}")
+                        adb.connect(f"127.0.0.1:{port}", timeout=1.0)
                     except Exception:
                         pass
             try:
@@ -134,51 +128,41 @@ def connect_to_any_emulator(force: bool = False):
             except Exception:
                 online_devices = []
 
-        if not online_devices:
-            d = None
-            return None
-
-        # 3. اختيار أنسب سيريال (تفضيل 127.0.0.1:* أولاً ثم emulator-*)
-        target_serial: str = ""
-        # أولوية 1: 127.0.0.1:5555 أو أي IP محلي
+        # اختيار السيريال
+        target_serial = ""
         for dev in online_devices:
             s = dev.serial
-            if s and s.startswith("127.0.0.1:"):
+            if s and (s.startswith("127.0.0.1:") or s.startswith("emulator-")):
                 target_serial = s
                 break
-        # أولوية 2: emulator-*
-        if not target_serial:
-            for dev in online_devices:
-                s = dev.serial
-                if s and s.startswith("emulator-"):
-                    target_serial = s
-                    break
-        # أولوية 3: أول جهاز متاح
         if not target_serial and online_devices:
-            first_serial = online_devices[0].serial
-            if first_serial:
-                target_serial = str(first_serial)
+            target_serial = online_devices[0].serial
 
-        if not target_serial:
-            d = None
-            return None
+        if target_serial:
+            try:
+                new_dev = u2.connect(target_serial)
+                if is_device_alive(new_dev):
+                    d = new_dev
+                    print(f"[OK] Connected to emulator: [{target_serial}]")
+                    return d
+            except Exception as e:
+                print(f"[WARN] Failed connecting to {target_serial}: {e}")
 
-        # 4. الاتصال عبر uiautomator2 بالسيريال المحدد لمنع AdbError
+        # محاولة 4: الاتصال الافتراضي بدون سيريال
         try:
-            new_device = u2.connect(target_serial)
-            if is_device_alive(new_device):
-                d = new_device
-                prod_name = d.info.get("productName", "") if d and d.info else ""
-                print(f"[OK] Connected to emulator: [{target_serial}] ({prod_name})")
+            new_dev = u2.connect()
+            if is_device_alive(new_dev):
+                d = new_dev
+                print(f"[OK] Connected to default emulator via u2.connect()")
                 return d
-        except Exception as e:
-            print(f"[WARN] Failed to connect to emulator ({target_serial}): {e}")
+        except Exception:
+            pass
 
         d = None
         return None
 
 def get_device(max_retries: int = 1, retry_delay: float = 1.0):
-    """الحصول على كائن المحاكي مع آلية إعادة المحاولة (Retry Mechanism)"""
+    """الحصول على كائن المحاكي مع آلية إعادة المحاولة لتجنب انهيار السيرفر"""
     global d
     if is_device_alive(d):
         return d
@@ -191,12 +175,10 @@ def get_device(max_retries: int = 1, retry_delay: float = 1.0):
             time.sleep(retry_delay)
     return None
 
-# 4. خيط خلفي (Background Thread) للاتصال وإعادة المحاولة التلقائية عند إقلاع السيرفر
+# خيط خلفي للاتصال عند بدء تشغيل السيرفر
 def background_emulator_connector():
-    """يحاول الاتصال بالمحاكي في الخلفية عند بدء التشغيل دون تعطيل سيرفر Uvicorn"""
     print("[INFO] Server started. Searching for active emulators in background...")
-    max_startup_attempts = 15  # محاولة لمدة 30 ثانية أثناء إقلاع المحاكي
-    for i in range(max_startup_attempts):
+    for _ in range(15):
         dev = connect_to_any_emulator(force=True)
         if dev:
             return
@@ -205,61 +187,130 @@ def background_emulator_connector():
 
 threading.Thread(target=background_emulator_connector, daemon=True).start()
 
-# 5. منطق التنقل التلقائي الذكي داخل تطبيق نُسك
+# 4. دوال التفاعل مع شاشة المحاكي (المنطق الأصلي)
 PACKAGE_NUSUK = "com.moh.nusukapp"
+
+def fill_field(device, index, value, offset_y=45):
+    """الدالة الأصلية لتعبئة الحقول بحسب الإحداثيات وترتيب TextView"""
+    labels = device(className="android.widget.TextView")
+    if len(labels) > index:
+        label = labels[index]
+        b = label.info["bounds"]
+        device.click(b["left"] + 50, b["bottom"] + offset_y)
+        try:
+            device.clear_text()
+        except Exception:
+            pass
+        device.send_keys(str(value))
+    else:
+        device.send_keys(str(value))
+
+def fill_registration_fields(device, name: str, email: str, password: str):
+    """تعبئة حقول الاسم الكامل، البريد، وكلمة المرور بأعلى دقة"""
+    edits = device(className="android.widget.EditText")
+    if len(edits) >= 3:
+        # الحقل 0: الاسم
+        edits[0].click()
+        time.sleep(0.15)
+        edits[0].set_text(name)
+        time.sleep(0.2)
+        # الحقل 1: الإيميل
+        edits[1].click()
+        time.sleep(0.15)
+        edits[1].set_text(email)
+        time.sleep(0.2)
+        # الحقل 2: كلمة المرور
+        edits[2].click()
+        time.sleep(0.15)
+        try:
+            device.clear_text()
+        except Exception:
+            pass
+        edits[2].set_text(password)
+        time.sleep(0.2)
+        return True
+    else:
+        # الطريقة الأصلية عبر fill_field
+        fill_field(device, 2, name)
+        time.sleep(0.2)
+        fill_field(device, 3, email)
+        time.sleep(0.2)
+        fill_field(device, 4, password)
+        time.sleep(0.2)
+        return True
 
 def navigate_to_register_screen(device):
     """
-    التحقق من مكان التطبيق والتنقل الذكي لشاشة إنشاء الحساب:
-    1. فتح التطبيق إن لم يكن مفتوحاً في الواجهة
-    2. تجاوز شاشة البداية (تسجيل الدخول أو إنشاء حساب)
-    3. تجاوز شاشة اختيار وسيلة الدخول بالضغط على (أنشئ حسابًا جديدًا)
-    4. التأكد من الوصول لشاشة النموذج (أنشئ حسابك)
+    التنقل الذكي لشاشة إنشاء الحساب:
+    - إذا كان التطبيق مغلقاً أو في الخلفية، يفتحه
+    - يتجاوز شاشة الترحيب بالضغط على 'تسجيل الدخول أو إنشاء حساب'
+    - يضغط على 'أنشئ حسابًا جديدًا'
+    - إذا كان التطبيق مفتوحاً على الشاشة الرئيسية (من معتمر سابق)، يرجع لشاشة التسجيل
     """
     try:
-        # التأكد أن تطبيق نسك في الواجهة
         cur = device.app_current()
         if not cur or cur.get("package") != PACKAGE_NUSUK:
-            print(f"[NAV] Launching app: {PACKAGE_NUSUK}")
+            print(f"[NAV] Launching {PACKAGE_NUSUK}...")
             device.app_start(PACKAGE_NUSUK)
             time.sleep(2.5)
 
-        # فحص الشاشة الحالية
-        for _ in range(5):
-            # شاشة البداية والترحيب
-            btn_welcome = device(text="تسجيل الدخول أو إنشاء حساب")
-            if btn_welcome.exists:
-                print("[NAV] Step 1: Clicking 'تسجيل الدخول أو إنشاء حساب'")
-                btn_welcome.click()
-                time.sleep(1.5)
-                continue
-
-            # شاشة اختيار إنشاء حساب جديد
-            btn_create = device(text="أنشئ حسابًا جديدًا")
-            if not btn_create.exists:
-                btn_create = device(textContains="أنشئ حساب")
-            if btn_create.exists and not device(className="android.widget.EditText").exists:
-                print("[NAV] Step 2: Clicking 'أنشئ حسابًا جديدًا'")
-                btn_create.click()
-                time.sleep(1.5)
-                continue
-
-            # التحقق هل وصلنا لشاشة نموذج التسجيل التي تحتوي على حقول الإدخال
-            edit_texts = device(className="android.widget.EditText")
-            if len(edit_texts) >= 3 or device(text="الاسم الكامل").exists:
-                print("[NAV] Step 3: Registration form is active and ready.")
+        for _ in range(6):
+            # هل شاشة النموذج جاهزة؟
+            if len(device(className="android.widget.EditText")) >= 3 or device(text="الاسم الكامل").exists:
+                print("[NAV] Registration form ready.")
                 return True
 
-            time.sleep(1)
+            # شاشة البداية
+            if device(text="تسجيل الدخول أو إنشاء حساب").exists:
+                print("[NAV] Step 1: Clicking 'تسجيل الدخول أو إنشاء حساب'")
+                device(text="تسجيل الدخول أو إنشاء حساب").click()
+                time.sleep(1.5)
+                continue
 
-        # محاولة أخيرة: التحقق من وجود الحقول
-        return len(device(className="android.widget.EditText")) >= 1
+            # زر أنشئ حسابًا جديدًا
+            if device(text="أنشئ حسابًا جديدًا").exists:
+                print("[NAV] Step 2: Clicking 'أنشئ حسابًا جديدًا'")
+                device(text="أنشئ حسابًا جديدًا").click()
+                time.sleep(1.5)
+                continue
+            elif device(textContains="أنشئ حساب").exists and not device(className="android.widget.EditText").exists:
+                device(textContains="أنشئ حساب").click()
+                time.sleep(1.5)
+                continue
+
+            # إذا كان التطبيق على الشاشة الرئيسية أو في الداخل
+            if device(text="الرئيسية").exists or device(text="الروضة").exists or device(text="المحفظة").exists:
+                # الضغط على أيقونة الملف الشخصي بالأعلى يسار
+                device.click(65, 101)
+                time.sleep(1.5)
+                if device(text="أنشئ حسابًا جديدًا").exists:
+                    device(text="أنشئ حسابًا جديدًا").click()
+                    time.sleep(1.5)
+                    continue
+                elif device(text="تسجيل الخروج").exists:
+                    device(text="تسجيل الخروج").click()
+                    time.sleep(1.0)
+                    if device(text="تسجيل الخروج").exists:
+                        device(text="تسجيل الخروج").click()
+                    time.sleep(1.5)
+                    continue
+
+            # تجاوز شاشات أذونات النظام
+            if device(text="WHILE USING THE APP").exists:
+                device(text="WHILE USING THE APP").click()
+            if device(text="ALLOW").exists:
+                device(text="ALLOW").click()
+
+            time.sleep(1.0)
+
+        return len(device(className="android.widget.EditText")) >= 1 or device(text="الاسم الكامل").exists
     except Exception as ex:
         print(f"[WARN] Navigation error: {ex}")
         return False
 
+# 5. سحب رمز التحقق OTP تلقائياً من بريد Gmail عبر IMAP
 def get_latest_email_id(email_user: str, app_password: str) -> int:
-    """الحصول على رقم آخر رسالة في البريد لتجنب قراءة أكواد قديمة منتهية الصلاحية"""
+    """معرفة رقم آخر رسالة في البريد لضمان عدم قراءة كود قديم"""
     try:
         clean_pass = app_password.replace(" ", "").strip()
         clean_user = email_user.strip()
@@ -280,15 +331,12 @@ def get_latest_email_id(email_user: str, app_password: str) -> int:
             mail.logout()
         except Exception:
             pass
-    except Exception as ex:
-        print(f"[OTP] Notice getting baseline email ID: {ex}")
+    except Exception:
+        pass
     return 0
 
 def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, max_wait_seconds: int = 40) -> str:
-    """
-    الاتصال ببريد Gmail عبر IMAP وسحب رمز التحقق الجديد (OTP مكون من 4 أرقام)
-    مرسل من nusuk.sa بعد بدء الطلب الحالي
-    """
+    """الاتصال بـ Gmail وسحب كود OTP المكون من 4 أرقام"""
     if not email_user or not app_password:
         return ""
 
@@ -308,14 +356,12 @@ def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, ma
             status, messages = mail.search(None, "ALL")
             if status == "OK" and messages and messages[0]:
                 msg_ids = messages[0].split()
-                # إذا كان لدينا baseline_id، نفحص فقط الرسائل الأحدث منه
                 candidates = []
                 for mid in reversed(msg_ids[-6:]):
                     mid_num = int(mid)
                     if baseline_id == 0 or mid_num > baseline_id:
                         candidates.append(mid)
 
-                # إذا لم تصل رسالة جديدة بعد، ننتظر وصولها
                 for msg_id in candidates:
                     res, data = mail.fetch(msg_id, "(RFC822)")
                     if res != "OK" or not data or not data[0]:
@@ -325,7 +371,6 @@ def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, ma
                     subject = str(msg.get("Subject", ""))
                     sender = str(msg.get("From", ""))
 
-                    # مطابقة رسائل كود التحقق من نُسك
                     if ("nusuk" in sender.lower() or 
                         "nusuk" in subject.lower() or 
                         "verification" in subject.lower() or 
@@ -344,11 +389,11 @@ def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, ma
                             if payload:
                                 body += payload.decode("utf-8", errors="ignore")
 
-                        # البحث عن النمط [ 1234 ] أولاً لأنه نمط نُسك الرسمي
+                        # البحث عن النمط [ 1234 ] أولاً
                         exact_match = re.search(r'\[\s*(\d{4})\s*\]', body)
                         if exact_match:
                             otp = exact_match.group(1)
-                            print(f"[OTP] Successfully retrieved NEW OTP: [{otp}] from email {msg_id.decode()} ({subject})")
+                            print(f"[OTP] Successfully retrieved OTP: [{otp}] from email {msg_id.decode()}")
                             try:
                                 mail.logout()
                             except Exception:
@@ -358,7 +403,7 @@ def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, ma
                         codes = re.findall(r'\b\d{4}\b', body)
                         if codes:
                             otp = codes[0]
-                            print(f"[OTP] Successfully retrieved OTP: {otp} from email {msg_id.decode()} ({subject})")
+                            print(f"[OTP] Successfully retrieved OTP: [{otp}] from email {msg_id.decode()}")
                             try:
                                 mail.logout()
                             except Exception:
@@ -371,7 +416,6 @@ def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, ma
                 pass
 
         except Exception as ex:
-            print(f"[OTP] IMAP polling notice: {ex}")
             if mail:
                 try:
                     mail.logout()
@@ -384,86 +428,34 @@ def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, ma
     return ""
 
 def enter_otp_on_screen(device, otp: str):
-    """
-    إدخال رمز التحقق المكون من 4 أرقام في مربعات الإدخال على شاشة المحاكي
-    بترتيب الأرقام الصحيح من اليسار لليمين LTR ثم الضغط على زر (تحديث الملف الشخصي)
-    """
+    """إدخال كود التحقق في المربعات على الشاشة وتأكيده"""
     print(f"[OTP] Entering 4-digit code {otp} on screen...")
     edits = device(className="android.widget.EditText")
     if len(edits) == 4:
-        # فرز المربعات من اليسار إلى اليمين (الترتيب الطبيعي لكتابة وقراءة الأرقام)
         boxes_ltr = sorted(edits, key=lambda e: e.info['bounds']['left'])
         for i, digit in enumerate(otp[:4]):
-            boxes_ltr[i].click()
-            time.sleep(0.15)
-            boxes_ltr[i].set_text(digit)
-            time.sleep(0.15)
+            try:
+                boxes_ltr[i].click()
+                time.sleep(0.1)
+                boxes_ltr[i].set_text(digit)
+            except Exception:
+                device.shell(f"input text {digit}")
+            time.sleep(0.1)
     else:
-        if edits:
-            edits[0].click()
-            time.sleep(0.2)
-            device.send_keys(otp)
+        device.shell(f"input text {otp}")
 
     time.sleep(1.0)
-    # الضغط على زر "تحديث الملف الشخصي"
-    btn_submit = device.xpath('//android.widget.TextView[@text="تحديث الملف الشخصي"]/ancestor-or-self::*[@clickable="true"]')
-    if btn_submit.exists:
-        btn_submit.click()
-        print("[OTP] Clicked 'تحديث الملف الشخصي' button")
-    elif device(text="تحديث الملف الشخصي").exists:
-        device(text="تحديث الملف الشخصي").click()
-        print("[OTP] Clicked 'تحديث الملف الشخصي' directly")
+    # الضغط على زر التأكيد
+    for txt in ["تأكيد البريد الإلكتروني", "تحديث الملف الشخصي", "تأكيد", "تحقق"]:
+        if device(text=txt).exists:
+            device(text=txt).click()
+            print(f"[OTP] Clicked '{txt}' button")
+            break
     else:
-        device.click(540, 690)
-        print("[OTP] Clicked fallback button coordinates (540, 690)")
+        device.click(540, 714)
+        print("[OTP] Clicked confirmation coordinates (540, 714)")
 
-    time.sleep(3.0)
-
-def fill_registration_fields(device, name: str, email: str, password: str):
-    """
-    تعبئة حقول الاسم الكامل، البريد الإلكتروني، وكلمة المرور
-    باستخدام عناصر EditText المباشرة وبأعلى دقة وثبات
-    """
-    edit_texts = device(className="android.widget.EditText")
-    if len(edit_texts) >= 3:
-        # الحقل 0: الاسم الكامل
-        edit_texts[0].click()
-        time.sleep(0.2)
-        edit_texts[0].set_text(name)
-        time.sleep(0.3)
-
-        # الحقل 1: البريد الإلكتروني
-        edit_texts[1].click()
-        time.sleep(0.2)
-        edit_texts[1].set_text(email)
-        time.sleep(0.3)
-
-        # الحقل 2: كلمة المرور الموحدة (Msamy2006**)
-        edit_texts[2].click()
-        time.sleep(0.2)
-        try:
-            device.clear_text()
-        except Exception:
-            pass
-        time.sleep(0.1)
-        edit_texts[2].set_text(password)
-        time.sleep(0.3)
-        return True
-    else:
-        # طريقة بديلة في حال اختلاف الترتيب: البحث بالنصوص الإرشادية
-        if device(text="الاسم الكامل").exists:
-            device(text="الاسم الكامل").click()
-            device.send_keys(name)
-            time.sleep(0.3)
-        if device(text="عنوان البريد الإلكتروني").exists:
-            device(text="عنوان البريد الإلكتروني").click()
-            device.send_keys(email)
-            time.sleep(0.3)
-        if device(text="كلمة المرور").exists:
-            device(text="كلمة المرور").click()
-            device.send_keys(password)
-            time.sleep(0.3)
-        return True
+    time.sleep(2.5)
 
 # 6. مسارات الـ API
 @app.get("/api/status")
@@ -474,6 +466,7 @@ def check_status():
     serial = device.serial if device else None
     return {
         "status": "ready" if device else "waiting_for_device",
+        "ok": True,
         "online": True,
         "device_connected": device is not None,
         "device_serial": serial,
@@ -482,7 +475,6 @@ def check_status():
 
 @app.get("/api/reconnect")
 def reconnect():
-    """إعادة فحص وإعادة اتصال فورية بالمحاكي حسب الطلب"""
     device = connect_to_any_emulator(force=True)
     return {
         "success": device is not None,
@@ -493,15 +485,11 @@ def reconnect():
 
 @app.get("/api/devices")
 def list_devices():
-    """عرض جميع المحاكيات والأجهزة المكتشفة في النظام"""
     adb = adbutils.adb
     devices_info = []
     try:
         for dev in adb.device_list():
-            devices_info.append({
-                "serial": dev.serial,
-                "state": dev.get_state()
-            })
+            devices_info.append({"serial": dev.serial, "state": dev.get_state()})
     except Exception as e:
         devices_info.append({"error": str(e)})
 
@@ -515,7 +503,7 @@ def home():
     return {
         "status": "online",
         "app": "Nusuk ERP & Automation Pro Local Server",
-        "version": "2.2",
+        "version": "2.3",
         "device_connected": d is not None and is_device_alive(d)
     }
 
@@ -530,14 +518,12 @@ def register(data: dict):
 
     name = p.get("الاسم") or p.get("Name") or "معتمر نسك"
     email = p.get("البريد الإلكتروني") or p.get("Email") or p.get("email") or client_email
-    # كلمة مرور حساب نُسك الموحدة والثابتة دائماً (Msamy2006**) - منفصلة تماماً عن client_pass المخصص لجوجل App Password
     nusuk_fixed_pass = data.get("nusuk_password") or p.get("الباسورد") or p.get("Password") or "Msamy2006**"
-    password = str(nusuk_fixed_pass).strip()
-    if not password:
-        password = "Msamy2006**"
+    password = str(nusuk_fixed_pass).strip() or "Msamy2006**"
     passport = p.get("رقم الجواز") or p.get("Passport") or p.get("passport") or ""
     visa = p.get("رقم التأشيرة") or p.get("Visa") or p.get("visa") or ""
 
+    # الاتصال التلقائي بالمحاكي قبل بدء تسجيل المعتمر
     device = get_device(max_retries=3, retry_delay=1.0)
     if not device:
         return {
@@ -549,8 +535,12 @@ def register(data: dict):
     try:
         print(f"[PROCESS] Starting registration for: {name} ({email}) - Passport: {passport}")
 
-        # 1. التنقل الذكي لشاشة إنشاء الحساب
-        navigate_to_register_screen(device)
+        # 1. التنقل لشاشة إنشاء الحساب
+        nav_ok = navigate_to_register_screen(device)
+        if not nav_ok:
+            # محاولة أخيرة عبر فتح التطبيق مباشرة
+            device.app_start(PACKAGE_NUSUK)
+            time.sleep(2.0)
 
         # 2. تعبئة بيانات الحساب (الاسم، الإيميل، الباسورد)
         fill_registration_fields(device, name, email, password)
@@ -558,31 +548,23 @@ def register(data: dict):
         # تسجيل رقم آخر رسالة في البريد قبل الضغط على الزر لضمان عدم قراءة كود قديم
         baseline_msg_id = get_latest_email_id(client_email, client_pass)
 
-        # 3. الضغط على زر "أنشئ حسابك" الفعلي في أسفل النموذج (وليس عنوان الصفحة العلوي)
+        # 3. الضغط على زر "أنشئ حسابك"
         time.sleep(0.5)
-        clicked = False
         items = device(text="أنشئ حسابك")
         if len(items) >= 2:
-            # إذا وجد أكثر من عنصر، فالعنصر الأخير هو الزر السفلي
+            # الزر السفلي (وليس عنوان الصفحة العلوي)
             b = items[len(items) - 1].info["bounds"]
-            cx = (b["left"] + b["right"]) // 2
-            cy = (b["top"] + b["bottom"]) // 2
-            device.click(cx, cy)
-            clicked = True
-            print(f"[PROCESS] Clicked bottom 'أنشئ حسابك' button at ({cx}, {cy})")
+            device.click((b["left"] + b["right"]) // 2, (b["top"] + b["bottom"]) // 2)
+            print("[PROCESS] Clicked bottom 'أنشئ حسابك' button")
         elif len(items) == 1:
             items[0].click()
-            clicked = True
             print("[PROCESS] Clicked 'أنشئ حسابك'")
-
-        if not clicked:
-            btns = device.xpath('//android.widget.TextView[contains(@text, "أنشئ حساب")]').all()
-            if btns:
-                btns[-1].click()
-                print("[PROCESS] Clicked last matching text element via XPath")
-            else:
-                device.click(540, 1140)
-                print("[PROCESS] Clicked fallback coordinates (540, 1140)")
+        elif len(device(className="android.widget.TextView")) > 6:
+            device(className="android.widget.TextView")[6].click()
+            print("[PROCESS] Clicked TextView[6] button")
+        else:
+            device.click(540, 1140)
+            print("[PROCESS] Clicked fallback coordinates (540, 1140)")
 
         time.sleep(2.5)
 
@@ -598,7 +580,7 @@ def register(data: dict):
                 "message": "الحساب مسجل مسبقاً في نٌسك"
             }
 
-        # 5. خطوة التحقق OTP تلقائياً من بريد الجيميل وإدخال الرمز في المحاكي
+        # 5. خطوة التحقق OTP تلقائياً من Gmail
         otp_code = ""
         is_otp_screen = False
         for _ in range(8):
@@ -611,29 +593,50 @@ def register(data: dict):
 
         if is_otp_screen:
             print("[PROCESS] OTP verification screen detected.")
-            # سحب الرمز الجديد تلقائياً من Gmail عبر IMAP بعد baseline_msg_id
             otp_code = fetch_nusuk_otp(client_email, client_pass, baseline_id=baseline_msg_id, max_wait_seconds=45)
             if otp_code:
                 print(f"[PROCESS] Entering fetched OTP: {otp_code}")
                 enter_otp_on_screen(device, otp_code)
             else:
-                print("[WARN] Could not fetch OTP automatically within timeout, waiting 15s for manual entry...")
+                print("[WARN] Could not fetch OTP automatically, waiting 15s...")
                 time.sleep(15.0)
 
-        # 6. الخطوات التكميلية (الروضة، استكمال الملف الشخصي، الجواز والتأشيرة)
+        # تجاوز أي نوافذ أذونات تظهر بعد التحقق (الموقع، الإشعارات)
         for _ in range(8):
-            if device(text="الروضة").exists or device(text="أكمل الملف الشخصي").exists:
+            if device(text="WHILE USING THE APP").exists:
+                device(text="WHILE USING THE APP").click()
+            elif device(text="أثناء استخدام التطبيق").exists:
+                device(text="أثناء استخدام التطبيق").click()
+            elif device(text="ALLOW").exists:
+                device(text="ALLOW").click()
+            elif device(text="لاحقًا").exists:
+                device(text="لاحقًا").click()
+            elif device(text="لاحقا").exists:
+                device(text="لاحقا").click()
+            elif device(text="الروضة").exists or device(text="أكمل الملف الشخصي").exists:
                 break
             time.sleep(1.0)
 
+        # 6. الخطوات التكميلية الأصلية (الروضة، استكمال الملف الشخصي، الجواز والتأشيرة)
         if device(text="الروضة").exists:
             print("[PROCESS] Selecting Rawdah...")
             device(text="الروضة").click()
             time.sleep(1.5)
 
+        # اختيار رجال أو نساء ثم المتابعة في شاشة الروضة إن ظهرت
+        if device(text="رجال").exists:
+            device(text="رجال").click()
+            time.sleep(0.5)
+        if device(text="المتابعة").exists:
+            device(text="المتابعة").click()
+            time.sleep(1.5)
+
         if device(text="أكمل الملف الشخصي").exists:
             print("[PROCESS] Complete profile prompt...")
             device(text="أكمل الملف الشخصي").click()
+            time.sleep(1.5)
+        elif device(textContains="أكمل الملف").exists:
+            device(textContains="أكمل الملف").click()
             time.sleep(1.5)
 
         if device(textContains="زائر دولي").exists:
@@ -670,6 +673,15 @@ def register(data: dict):
             time.sleep(2.0)
 
         print(f"[PROCESS] Registration completed successfully for: {name} (OTP: {otp_code or 'N/A'})")
+
+        # إعادة تشغيل التطبيق لضمان جاهزية المحاكي للمعتمر التالي في الطابور
+        try:
+            device.app_stop(PACKAGE_NUSUK)
+            time.sleep(0.8)
+            device.app_start(PACKAGE_NUSUK)
+        except Exception:
+            pass
+
         return {
             "success": True,
             "status": "completed",
