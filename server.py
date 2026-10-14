@@ -124,21 +124,27 @@ def connect_to_any_emulator(force: bool = False):
             return None
 
         # 3. اختيار أنسب سيريال (تفضيل emulator-* أو 127.0.0.1:*)
-        target_serial = None
+        target_serial: str = ""
         for dev in online_devices:
             s = dev.serial
-            if s.startswith("emulator-") or s.startswith("127.0.0.1:"):
+            if s and (s.startswith("emulator-") or s.startswith("127.0.0.1:")):
                 target_serial = s
                 break
+        if not target_serial and online_devices:
+            first_serial = online_devices[0].serial
+            if first_serial:
+                target_serial = str(first_serial)
+
         if not target_serial:
-            target_serial = online_devices[0].serial
+            d = None
+            return None
 
         # 4. الاتصال عبر uiautomator2 بالسيريال المحدد لمنع AdbError
         try:
             new_device = u2.connect(target_serial)
             if is_device_alive(new_device):
                 d = new_device
-                prod_name = d.info.get("productName", "")
+                prod_name = d.info.get("productName", "") if d and d.info else ""
                 print(f"✅ تم الاتصال بنجاح بالمحاكي: [{target_serial}] ({prod_name})")
                 return d
         except Exception as e:

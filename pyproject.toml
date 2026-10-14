@@ -1,0 +1,7 @@
+[tool.pyright]
+pythonPath = "C:\\Users\\LEGION\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe"
+extraPaths = ["C:\\Users\\LEGION\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages"]
+
+[tool.pyrefly]
+pythonPath = "C:\\Users\\LEGION\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe"
+search-path = ["C:\\Users\\LEGION\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages"]
