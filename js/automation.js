@@ -94,6 +94,10 @@ function togglePassVisibility() {
 function saveActiveCredentials() {
     localStorage.setItem("nusuk_active_email", document.getElementById("clientEmail").value.trim());
     localStorage.setItem("nusuk_active_pass", document.getElementById("clientPass").value.trim());
+    const nusukPassEl = document.getElementById("nusukAccountPass");
+    if (nusukPassEl) {
+        localStorage.setItem("nusuk_account_pass", nusukPassEl.value.trim() || "Msamy2006**");
+    }
 }
 
 function getSavedProfiles() {
@@ -335,6 +339,8 @@ async function processSinglePilgrim(idx) {
     const natOpt = document.getElementById("natOption").value;
     const natY = natOpt === "2" ? 275 : 195;
 
+    const nusukPass = document.getElementById("nusukAccountPass")?.value.trim() || "Msamy2006**";
+
     try {
         const res = await fetch(`${API_BASE}/api/register`, {
             method: "POST",
@@ -342,13 +348,15 @@ async function processSinglePilgrim(idx) {
             body: JSON.stringify({
                 client_email: clientEmail,
                 client_pass: clientPass,
+                nusuk_password: nusukPass,
                 nationality: natText,
                 nationality_y: natY,
                 pilgrim: {
                     ...p.raw,
                     "رقم الجواز": p.passport,
                     "رقم التأشيرة": p.visa,
-                    "email": p.email || clientEmail
+                    "email": p.email || clientEmail,
+                    "الباسورد": nusukPass
                 }
             })
         });
@@ -502,8 +510,10 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
 
         const clientEmail = document.getElementById("clientEmail");
         const clientPass = document.getElementById("clientPass");
+        const nusukAccountPass = document.getElementById("nusukAccountPass");
         if (clientEmail) clientEmail.value = localStorage.getItem("nusuk_active_email") || "";
         if (clientPass) clientPass.value = localStorage.getItem("nusuk_active_pass") || "";
+        if (nusukAccountPass) nusukAccountPass.value = localStorage.getItem("nusuk_account_pass") || "Msamy2006**";
 
         renderSavedProfiles();
         loadNatSettings();

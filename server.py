@@ -274,9 +274,14 @@ def fill_registration_fields(device, name: str, email: str, password: str):
         edit_texts[1].set_text(email)
         time.sleep(0.3)
 
-        # الحقل 2: كلمة المرور
+        # الحقل 2: كلمة المرور الموحدة (Msamy2006**)
         edit_texts[2].click()
         time.sleep(0.2)
+        try:
+            device.clear_text()
+        except Exception:
+            pass
+        time.sleep(0.1)
         edit_texts[2].set_text(password)
         time.sleep(0.3)
         return True
@@ -361,7 +366,11 @@ def register(data: dict):
 
     name = p.get("الاسم") or p.get("Name") or "معتمر نسك"
     email = p.get("البريد الإلكتروني") or p.get("Email") or p.get("email") or client_email
-    password = p.get("الباسورد") or p.get("Password") or client_pass or "Msamy2006**"
+    # كلمة مرور حساب نُسك الموحدة والثابتة دائماً (Msamy2006**) - منفصلة تماماً عن client_pass المخصص لجوجل App Password
+    nusuk_fixed_pass = data.get("nusuk_password") or p.get("الباسورد") or p.get("Password") or "Msamy2006**"
+    password = str(nusuk_fixed_pass).strip()
+    if not password:
+        password = "Msamy2006**"
     passport = p.get("رقم الجواز") or p.get("Passport") or p.get("passport") or ""
     visa = p.get("رقم التأشيرة") or p.get("Visa") or p.get("visa") or ""
 
