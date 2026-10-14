@@ -258,10 +258,36 @@ def navigate_to_register_screen(device):
         print(f"[WARN] Navigation error: {ex}")
         return False
 
-def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 40) -> str:
+def get_latest_email_id(email_user: str, app_password: str) -> int:
+    """الحصول على رقم آخر رسالة في البريد لتجنب قراءة أكواد قديمة منتهية الصلاحية"""
+    try:
+        clean_pass = app_password.replace(" ", "").strip()
+        clean_user = email_user.strip()
+        mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, timeout=7)
+        mail.login(clean_user, clean_pass)
+        mail.select("INBOX")
+        status, messages = mail.search(None, "ALL")
+        if status == "OK" and messages and messages[0]:
+            ids = messages[0].split()
+            if ids:
+                last_id = int(ids[-1])
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+                return last_id
+        try:
+            mail.logout()
+        except Exception:
+            pass
+    except Exception as ex:
+        print(f"[OTP] Notice getting baseline email ID: {ex}")
+    return 0
+
+def fetch_nusuk_otp(email_user: str, app_password: str, baseline_id: int = 0, max_wait_seconds: int = 40) -> str:
     """
-    الاتصال ببريد Gmail عبر IMAP وسحب أحدث رمز تحقق (OTP مكون من 4 أرقام)
-    مرسل من nusuk.sa تلقائياً وبدون أي تدخل يدوي
+    الاتصال ببريد Gmail عبر IMAP وسحب رمز التحقق الجديد (OTP مكون من 4 أرقام)
+    مرسل من nusuk.sa بعد بدء الطلب الحالي
     """
     if not email_user or not app_password:
         return ""
@@ -270,7 +296,7 @@ def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 
     clean_user = email_user.strip()
     start_time = time.time()
 
-    print(f"[OTP] Checking Gmail IMAP for {clean_user} (timeout: {max_wait_seconds}s)...")
+    print(f"[OTP] Checking Gmail IMAP for {clean_user} (baseline_id={baseline_id}, timeout={max_wait_seconds}s)...")
 
     while time.time() - start_time < max_wait_seconds:
         mail = None
@@ -282,8 +308,15 @@ def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 
             status, messages = mail.search(None, "ALL")
             if status == "OK" and messages and messages[0]:
                 msg_ids = messages[0].split()
-                # فحص آخر 5 رسائل فقط لتسريع الاستجابة
-                for msg_id in reversed(msg_ids[-5:]):
+                # إذا كان لدينا baseline_id، نفحص فقط الرسائل الأحدث منه
+                candidates = []
+                for mid in reversed(msg_ids[-6:]):
+                    mid_num = int(mid)
+                    if baseline_id == 0 or mid_num > baseline_id:
+                        candidates.append(mid)
+
+                # إذا لم تصل رسالة جديدة بعد، ننتظر وصولها
+                for msg_id in candidates:
                     res, data = mail.fetch(msg_id, "(RFC822)")
                     if res != "OK" or not data or not data[0]:
                         continue
@@ -311,10 +344,21 @@ def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 
                             if payload:
                                 body += payload.decode("utf-8", errors="ignore")
 
+                        # البحث عن النمط [ 1234 ] أولاً لأنه نمط نُسك الرسمي
+                        exact_match = re.search(r'\[\s*(\d{4})\s*\]', body)
+                        if exact_match:
+                            otp = exact_match.group(1)
+                            print(f"[OTP] Successfully retrieved NEW OTP: [{otp}] from email {msg_id.decode()} ({subject})")
+                            try:
+                                mail.logout()
+                            except Exception:
+                                pass
+                            return otp
+
                         codes = re.findall(r'\b\d{4}\b', body)
                         if codes:
                             otp = codes[0]
-                            print(f"[OTP] Successfully retrieved OTP: {otp} from email: {subject}")
+                            print(f"[OTP] Successfully retrieved OTP: {otp} from email {msg_id.decode()} ({subject})")
                             try:
                                 mail.logout()
                             except Exception:
@@ -334,7 +378,7 @@ def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 
                 except Exception:
                     pass
 
-        time.sleep(2.5)
+        time.sleep(2.0)
 
     print("[OTP] Timeout: could not retrieve OTP within allocated time.")
     return ""
@@ -342,17 +386,17 @@ def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 
 def enter_otp_on_screen(device, otp: str):
     """
     إدخال رمز التحقق المكون من 4 أرقام في مربعات الإدخال على شاشة المحاكي
-    ثم الضغط على زر (تحديث الملف الشخصي)
+    بترتيب الأرقام الصحيح من اليسار لليمين LTR ثم الضغط على زر (تحديث الملف الشخصي)
     """
     print(f"[OTP] Entering 4-digit code {otp} on screen...")
     edits = device(className="android.widget.EditText")
     if len(edits) == 4:
-        # فرز المربعات من اليمين إلى اليسار (الترتيب الطبيعي للأرقام العربية RTL)
-        boxes_rtl = sorted(edits, key=lambda e: e.info['bounds']['left'], reverse=True)
+        # فرز المربعات من اليسار إلى اليمين (الترتيب الطبيعي لكتابة وقراءة الأرقام)
+        boxes_ltr = sorted(edits, key=lambda e: e.info['bounds']['left'])
         for i, digit in enumerate(otp[:4]):
-            boxes_rtl[i].click()
+            boxes_ltr[i].click()
             time.sleep(0.15)
-            device.send_keys(digit)
+            boxes_ltr[i].set_text(digit)
             time.sleep(0.15)
     else:
         if edits:
@@ -369,6 +413,9 @@ def enter_otp_on_screen(device, otp: str):
     elif device(text="تحديث الملف الشخصي").exists:
         device(text="تحديث الملف الشخصي").click()
         print("[OTP] Clicked 'تحديث الملف الشخصي' directly")
+    else:
+        device.click(540, 690)
+        print("[OTP] Clicked fallback button coordinates (540, 690)")
 
     time.sleep(3.0)
 
@@ -508,6 +555,9 @@ def register(data: dict):
         # 2. تعبئة بيانات الحساب (الاسم، الإيميل، الباسورد)
         fill_registration_fields(device, name, email, password)
 
+        # تسجيل رقم آخر رسالة في البريد قبل الضغط على الزر لضمان عدم قراءة كود قديم
+        baseline_msg_id = get_latest_email_id(client_email, client_pass)
+
         # 3. الضغط على زر "أنشئ حسابك" الفعلي في أسفل النموذج (وليس عنوان الصفحة العلوي)
         time.sleep(0.5)
         clicked = False
@@ -551,7 +601,7 @@ def register(data: dict):
         # 5. خطوة التحقق OTP تلقائياً من بريد الجيميل وإدخال الرمز في المحاكي
         otp_code = ""
         is_otp_screen = False
-        for _ in range(6):
+        for _ in range(8):
             if (device(textContains="رمز التحقق").exists or 
                 device(textContains="البريد الإلكتروني").exists or 
                 len(device(className="android.widget.EditText")) == 4):
@@ -561,8 +611,8 @@ def register(data: dict):
 
         if is_otp_screen:
             print("[PROCESS] OTP verification screen detected.")
-            # سحب الرمز تلقائياً من Gmail عبر IMAP
-            otp_code = fetch_nusuk_otp(client_email, client_pass, max_wait_seconds=40)
+            # سحب الرمز الجديد تلقائياً من Gmail عبر IMAP بعد baseline_msg_id
+            otp_code = fetch_nusuk_otp(client_email, client_pass, baseline_id=baseline_msg_id, max_wait_seconds=45)
             if otp_code:
                 print(f"[PROCESS] Entering fetched OTP: {otp_code}")
                 enter_otp_on_screen(device, otp_code)
@@ -634,4 +684,4 @@ def register(data: dict):
 if __name__ == "__main__":
     import uvicorn
     print("[SERVER] Starting Nusuk ERP & Automation Pro server on http://127.0.0.1:8000 ...")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
