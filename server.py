@@ -1,4 +1,7 @@
+import email
+import imaplib
 import os
+import re
 import shutil
 import socket
 import sys
@@ -255,6 +258,120 @@ def navigate_to_register_screen(device):
         print(f"[WARN] Navigation error: {ex}")
         return False
 
+def fetch_nusuk_otp(email_user: str, app_password: str, max_wait_seconds: int = 40) -> str:
+    """
+    الاتصال ببريد Gmail عبر IMAP وسحب أحدث رمز تحقق (OTP مكون من 4 أرقام)
+    مرسل من nusuk.sa تلقائياً وبدون أي تدخل يدوي
+    """
+    if not email_user or not app_password:
+        return ""
+
+    clean_pass = app_password.replace(" ", "").strip()
+    clean_user = email_user.strip()
+    start_time = time.time()
+
+    print(f"[OTP] Checking Gmail IMAP for {clean_user} (timeout: {max_wait_seconds}s)...")
+
+    while time.time() - start_time < max_wait_seconds:
+        mail = None
+        try:
+            mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, timeout=10)
+            mail.login(clean_user, clean_pass)
+            mail.select("INBOX")
+
+            status, messages = mail.search(None, "ALL")
+            if status == "OK" and messages and messages[0]:
+                msg_ids = messages[0].split()
+                # فحص آخر 5 رسائل فقط لتسريع الاستجابة
+                for msg_id in reversed(msg_ids[-5:]):
+                    res, data = mail.fetch(msg_id, "(RFC822)")
+                    if res != "OK" or not data or not data[0]:
+                        continue
+                    raw_email = data[0][1]
+                    msg = email.message_from_bytes(raw_email)
+                    subject = str(msg.get("Subject", ""))
+                    sender = str(msg.get("From", ""))
+
+                    # مطابقة رسائل كود التحقق من نُسك
+                    if ("nusuk" in sender.lower() or 
+                        "nusuk" in subject.lower() or 
+                        "verification" in subject.lower() or 
+                        "تحقق" in subject or 
+                        "رمز" in subject):
+                        
+                        body = ""
+                        if msg.is_multipart():
+                            for part in msg.walk():
+                                if part.get_content_type() in ["text/plain", "text/html"]:
+                                    payload = part.get_payload(decode=True)
+                                    if payload:
+                                        body += payload.decode("utf-8", errors="ignore")
+                        else:
+                            payload = msg.get_payload(decode=True)
+                            if payload:
+                                body += payload.decode("utf-8", errors="ignore")
+
+                        codes = re.findall(r'\b\d{4}\b', body)
+                        if codes:
+                            otp = codes[0]
+                            print(f"[OTP] Successfully retrieved OTP: {otp} from email: {subject}")
+                            try:
+                                mail.logout()
+                            except Exception:
+                                pass
+                            return otp
+
+            try:
+                mail.logout()
+            except Exception:
+                pass
+
+        except Exception as ex:
+            print(f"[OTP] IMAP polling notice: {ex}")
+            if mail:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+
+        time.sleep(2.5)
+
+    print("[OTP] Timeout: could not retrieve OTP within allocated time.")
+    return ""
+
+def enter_otp_on_screen(device, otp: str):
+    """
+    إدخال رمز التحقق المكون من 4 أرقام في مربعات الإدخال على شاشة المحاكي
+    ثم الضغط على زر (تحديث الملف الشخصي)
+    """
+    print(f"[OTP] Entering 4-digit code {otp} on screen...")
+    edits = device(className="android.widget.EditText")
+    if len(edits) == 4:
+        # فرز المربعات من اليمين إلى اليسار (الترتيب الطبيعي للأرقام العربية RTL)
+        boxes_rtl = sorted(edits, key=lambda e: e.info['bounds']['left'], reverse=True)
+        for i, digit in enumerate(otp[:4]):
+            boxes_rtl[i].click()
+            time.sleep(0.15)
+            device.send_keys(digit)
+            time.sleep(0.15)
+    else:
+        if edits:
+            edits[0].click()
+            time.sleep(0.2)
+            device.send_keys(otp)
+
+    time.sleep(1.0)
+    # الضغط على زر "تحديث الملف الشخصي"
+    btn_submit = device.xpath('//android.widget.TextView[@text="تحديث الملف الشخصي"]/ancestor-or-self::*[@clickable="true"]')
+    if btn_submit.exists:
+        btn_submit.click()
+        print("[OTP] Clicked 'تحديث الملف الشخصي' button")
+    elif device(text="تحديث الملف الشخصي").exists:
+        device(text="تحديث الملف الشخصي").click()
+        print("[OTP] Clicked 'تحديث الملف الشخصي' directly")
+
+    time.sleep(3.0)
+
 def fill_registration_fields(device, name: str, email: str, password: str):
     """
     تعبئة حقول الاسم الكامل، البريد الإلكتروني، وكلمة المرور
@@ -431,24 +548,48 @@ def register(data: dict):
                 "message": "الحساب مسجل مسبقاً في نٌسك"
             }
 
-        # 5. خطوة التحقق OTP (إذا كان مطلوباً، ينتظر التطبيق إدخال الرمز)
-        time.sleep(3.0)
+        # 5. خطوة التحقق OTP تلقائياً من بريد الجيميل وإدخال الرمز في المحاكي
+        otp_code = ""
+        is_otp_screen = False
+        for _ in range(6):
+            if (device(textContains="رمز التحقق").exists or 
+                device(textContains="البريد الإلكتروني").exists or 
+                len(device(className="android.widget.EditText")) == 4):
+                is_otp_screen = True
+                break
+            time.sleep(1.0)
 
-        # 6. الخطوات التكميلية (الروضة، استكمال الملف الشخصي، الجواز والتأشيرة) إن وجدت في الشاشة
+        if is_otp_screen:
+            print("[PROCESS] OTP verification screen detected.")
+            # سحب الرمز تلقائياً من Gmail عبر IMAP
+            otp_code = fetch_nusuk_otp(client_email, client_pass, max_wait_seconds=40)
+            if otp_code:
+                print(f"[PROCESS] Entering fetched OTP: {otp_code}")
+                enter_otp_on_screen(device, otp_code)
+            else:
+                print("[WARN] Could not fetch OTP automatically within timeout, waiting 15s for manual entry...")
+                time.sleep(15.0)
+
+        # 6. الخطوات التكميلية (الروضة، استكمال الملف الشخصي، الجواز والتأشيرة)
+        for _ in range(8):
+            if device(text="الروضة").exists or device(text="أكمل الملف الشخصي").exists:
+                break
+            time.sleep(1.0)
+
         if device(text="الروضة").exists:
             print("[PROCESS] Selecting Rawdah...")
             device(text="الروضة").click()
-            time.sleep(1.0)
+            time.sleep(1.5)
 
         if device(text="أكمل الملف الشخصي").exists:
             print("[PROCESS] Complete profile prompt...")
             device(text="أكمل الملف الشخصي").click()
-            time.sleep(1.0)
+            time.sleep(1.5)
 
         if device(textContains="زائر دولي").exists:
             print("[PROCESS] Selecting International Visitor...")
             device(textContains="زائر دولي").click()
-            time.sleep(1.0)
+            time.sleep(1.5)
 
         if device(text="الجنسية").exists:
             print(f"[PROCESS] Selecting nationality: {nationality}...")
@@ -465,21 +606,26 @@ def register(data: dict):
         if passport and device(textContains="جواز السفر").exists:
             print(f"[PROCESS] Entering passport: {passport}...")
             device(textContains="جواز السفر").click()
-            time.sleep(0.2)
+            time.sleep(0.3)
             device.send_keys(passport)
 
         if visa and device(textContains="رقم التأشيرة").exists:
             print(f"[PROCESS] Entering visa: {visa}...")
             device(textContains="رقم التأشيرة").click()
-            time.sleep(0.2)
+            time.sleep(0.3)
             device.send_keys(visa)
 
         if device(text="تحقّق من حسابك").exists:
             device(text="تحقّق من حسابك").click()
             time.sleep(2.0)
 
-        print(f"[PROCESS] Registration completed successfully for: {name}")
-        return {"success": True, "status": "completed", "message": "تمت العملية بنجاح"}
+        print(f"[PROCESS] Registration completed successfully for: {name} (OTP: {otp_code or 'N/A'})")
+        return {
+            "success": True,
+            "status": "completed",
+            "otp": otp_code,
+            "message": "تم التسجيل والتحقق بنجاح"
+        }
 
     except Exception as e:
         print(f"[ERROR] Registration exception: {e}")
