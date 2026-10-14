@@ -1,0 +1,77 @@
+body {
+    font-family: 'Cairo', sans-serif;
+    background-color: #0f172a;
+    color: #f8fafc;
+    overflow-x: hidden;
+}
+
+.glass {
+    background: rgba(30, 41, 59, 0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gold-gradient {
+    background: linear-gradient(135deg, #eab308 0%, #d4af37 50%, #a16207 100%);
+}
+
+/* الزرار النشط في شريط التنقل العلوي */
+.nav-tab-active {
+    background: linear-gradient(135deg, #eab308 0%, #d4af37 50%, #a16207 100%) !important;
+    color: #020617 !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.35);
+}
+
+/* زرار الجنسية المختار باللون الأصفر */
+.nat-btn-active {
+    background-color: #f59e0b !important;
+    color: #020617 !important;
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+}
+
+/* ألوان الليبلز لحالات الرحلات (جاري التسجيل / تم التسجيل / تم الحجز / تمت الزيارة) */
+.status-registering {
+    background: rgba(59, 130, 246, 0.18);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+}
+.status-registered {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.status-booked {
+    background: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.status-visited {
+    background: rgba(168, 85, 247, 0.18);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+/* صفوف الكشوفات المسددة (نفس اللون الأخضر في شيت الإكسل بتاعك) */
+.row-paid-green {
+    background-color: rgba(22, 163, 74, 0.22) !important;
+    border-right: 4px solid #22c55e;
+}
+
+/* تنسيق السكرول بار */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #d4af37;
+}
