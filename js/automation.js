@@ -2,12 +2,21 @@
 // Nusuk ERP Pro - Automation Engine & System Initializer (automation.js)
 // =========================================================================
 
-const API_BASE = "http://127.0.0.1:8000";
+// 1. رابط السيرفر المحلي المعتمد (http://127.0.0.1:7410)
+const DEFAULT_API_BASE = "http://127.0.0.1:7410";
+let API_BASE = localStorage.getItem("nusuk_server_url") || DEFAULT_API_BASE;
+// تنظيف الروابط القديمة إن كانت مخزنة في المتصفح سابقاً
+if (API_BASE.includes(":8000") || API_BASE.includes(":5036")) {
+    API_BASE = DEFAULT_API_BASE;
+    localStorage.setItem("nusuk_server_url", DEFAULT_API_BASE);
+}
+
 let pilgrimsList = [];
 let isProcessing = false;
 let stopRequested = false;
+let serverFailCount = 0;
 
-// 1. فحص حالة سيرفر البايثون المحلي وحالة المحاكي تلقائياً كل 3 ثواني
+// فحص حالة سيرفر البايثون المحلي وحالة المحاكي تلقائياً
 async function checkServerStatus() {
     const dot = document.getElementById("statusDot");
     const txt = document.getElementById("statusText");
@@ -15,25 +24,145 @@ async function checkServerStatus() {
     if (!dot || !txt || !badge) return;
 
     try {
-        const res = await fetch(`${API_BASE}/api/status`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+        const res = await fetch(`${API_BASE}/api/status`, {
+            method: "GET",
+            headers: { "Accept": "application/json" },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        // فحص مرن يقبل res.ok أو data.status === "ready" أو data.device_connected === true
         if (res.ok) {
+            serverFailCount = 0;
             const data = await res.json().catch(() => ({}));
-            dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-            if (data.device_connected) {
-                txt.textContent = "السيرفر متصل (المحاكي جاهز)";
+
+            dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]";
+            badge.className = "flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/50 text-xs font-bold cursor-pointer hover:bg-emerald-900/60 transition shadow-sm";
+            txt.className = "text-[11px] text-emerald-400 font-bold";
+
+            const isEmulatorReady = data.device_connected === true || data.status === "ready";
+            if (isEmulatorReady) {
+                const serial = data.serial || data.device_serial ? ` (${data.serial || data.device_serial})` : "";
+                txt.textContent = `السيرفر متصل (المحاكي جاهز${serial})`;
             } else {
                 txt.textContent = "السيرفر متصل (بانتظار المحاكي)";
             }
-            txt.className = "text-[11px] text-emerald-400 font-bold";
-            badge.className = "flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
+
+            badge.title = `السيرفر متصل بنجاح على ${API_BASE} - اضغط لمعاينة التفاصيل`;
+            hideMixedContentAlert();
             return;
         }
-    } catch (e) {}
+    } catch (e) {
+        // فشل الاتصال (عدم تشغيل السيرفر أو حظر Mixed Content / PNA من المتصفح)
+    }
 
+    serverFailCount++;
     dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
     txt.textContent = "السيرفر غير متصل";
-    txt.className = "text-[11px] text-red-400";
-    badge.className = "flex items-center gap-2 px-3 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold";
+    txt.className = "text-[11px] text-red-400 font-bold";
+    badge.className = "flex items-center gap-2 px-3 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold cursor-pointer hover:border-amber-400 transition";
+    badge.title = `تعذر الاتصال بـ ${API_BASE} - اضغط هنا لمعرفة خطوات الحل وفحص الاتصال`;
+
+    // إذا فشل الاتصال والموقع يعمل عبر HTTPS (GitHub Pages)، إظهار تنبيه توضيحي
+    if (serverFailCount >= 2 && window.location.protocol === "https:") {
+        showMixedContentAlert();
+    }
+}
+
+// تنبيه إرشادي لحل حظر Mixed Content / Private Network Access
+function showMixedContentAlert() {
+    let alertBox = document.getElementById("pnaMixedWarningBanner");
+    if (!alertBox) {
+        const parent = document.getElementById("pageAutomation");
+        if (parent) {
+            alertBox = document.createElement("div");
+            alertBox.id = "pnaMixedWarningBanner";
+            alertBox.className = "col-span-12 p-3.5 mb-2 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex flex-wrap items-center justify-between gap-3 shadow-lg";
+            alertBox.innerHTML = `
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
+                    <div>
+                        <strong class="font-bold text-amber-300">تنبيه اتصال السيرفر المحلي في متصفح Chrome:</strong>
+                        <span class="text-slate-300 text-[11px] block sm:inline"> المتصفح قد يمنع الاتصال بـ 127.0.0.1:7410 بسبب قيود HTTPS. إذا كان السيرفر يعمل على جهازك:</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="showServerTroubleshoot()" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition">
+                        <i class="fa-solid fa-wrench ml-1"></i> خطوات تفعيل الاتصال
+                    </button>
+                    <button onclick="testServerDirect()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-bold text-xs transition">
+                        <i class="fa-solid fa-arrow-up-right-from-square ml-1"></i> فحص السيرفر
+                    </button>
+                    <button onclick="hideMixedContentAlert(true)" class="p-1.5 text-slate-400 hover:text-white transition" title="إغلاق">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            `;
+            parent.insertBefore(alertBox, parent.firstChild);
+        }
+    } else if (alertBox.dataset.dismissed !== "true") {
+        alertBox.classList.remove("hidden");
+    }
+}
+
+function hideMixedContentAlert(permanently = false) {
+    const alertBox = document.getElementById("pnaMixedWarningBanner");
+    if (alertBox) {
+        alertBox.classList.add("hidden");
+        if (permanently) alertBox.dataset.dismissed = "true";
+    }
+}
+
+function testServerDirect() {
+    window.open(`${API_BASE}/api/status`, "_blank");
+}
+
+function showServerTroubleshoot() {
+    const modal = document.getElementById("serverTroubleshootModal");
+    if (modal) {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        const inputUrl = document.getElementById("troubleshootApiUrl");
+        if (inputUrl) inputUrl.value = API_BASE;
+    }
+}
+
+function closeServerTroubleshoot() {
+    const modal = document.getElementById("serverTroubleshootModal");
+    if (modal) {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+    }
+}
+
+function saveCustomServerUrl() {
+    const inputUrl = document.getElementById("troubleshootApiUrl");
+    if (inputUrl && inputUrl.value.trim()) {
+        let newUrl = inputUrl.value.trim().replace(/\/+$/, "");
+        if (!newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
+            newUrl = "http://" + newUrl;
+        }
+        API_BASE = newUrl;
+        localStorage.setItem("nusuk_server_url", newUrl);
+        serverFailCount = 0;
+        checkServerStatus();
+        closeServerTroubleshoot();
+        alert(`تم حفظ رابط السيرفر: ${newUrl}\nيتم الآن فحص الاتصال...`);
+    }
+}
+
+function resetDefaultServerUrl() {
+    API_BASE = DEFAULT_API_BASE;
+    localStorage.setItem("nusuk_server_url", DEFAULT_API_BASE);
+    const inputUrl = document.getElementById("troubleshootApiUrl");
+    if (inputUrl) inputUrl.value = DEFAULT_API_BASE;
+    serverFailCount = 0;
+    checkServerStatus();
+    closeServerTroubleshoot();
+    alert(`تمت استعادة الرابط الافتراضي: ${DEFAULT_API_BASE}`);
 }
 
 // 2. إدارة إعدادات الجنسية وتمييز الزرار المختار باللون الأصفر الذهبي
@@ -586,4 +715,11 @@ window.stopQueueProcessing = stopQueueProcessing;
 window.exportResultsToExcel = exportResultsToExcel;
 window.switchPage = switchPage;
 window.installPWA = installPWA;
+window.showServerTroubleshoot = showServerTroubleshoot;
+window.closeServerTroubleshoot = closeServerTroubleshoot;
+window.testServerDirect = testServerDirect;
+window.saveCustomServerUrl = saveCustomServerUrl;
+window.resetDefaultServerUrl = resetDefaultServerUrl;
+window.showMixedContentAlert = showMixedContentAlert;
+window.hideMixedContentAlert = hideMixedContentAlert;
 

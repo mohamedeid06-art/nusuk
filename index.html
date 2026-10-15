@@ -56,7 +56,7 @@
                 </button>
 
                 <!-- حالة سيرفر الأوتوميشن المحلي -->
-                <div id="serverStatusBadge" class="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
+                <div id="serverStatusBadge" onclick="showServerTroubleshoot()" title="اضغط لفحص الاتصال بالسيرفر وحل المشاكل" class="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold cursor-pointer hover:border-slate-500 transition">
                     <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
                     <span id="statusText" class="text-[11px] text-slate-300">فحص السيرفر...</span>
                 </div>
@@ -548,6 +548,58 @@
             </div>
         </div>
     </section>
+
+    <!-- ========================================================================= -->
+    <!-- نافذة تشخيص وحل مشاكل اتصال السيرفر المحلي (Mixed Content / PNA) -->
+    <!-- ========================================================================= -->
+    <div id="serverTroubleshootModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="glass max-w-lg w-full rounded-2xl p-6 border border-slate-700 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-amber-400 flex items-center gap-2">
+                    <i class="fa-solid fa-server"></i> تشخيص اتصال السيرفر المحلي (127.0.0.1:7410)
+                </h3>
+                <button onclick="closeServerTroubleshoot()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs text-slate-300">
+                <div>
+                    <label class="block font-bold text-slate-200 mb-1">رابط السيرفر المعتمد (API_BASE):</label>
+                    <div class="flex gap-2">
+                        <input id="troubleshootApiUrl" type="text" value="http://127.0.0.1:7410" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-400 text-xs">
+                        <button onclick="saveCustomServerUrl()" class="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl transition">حفظ</button>
+                        <button onclick="resetDefaultServerUrl()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl transition" title="استعادة الرابط الافتراضي"><i class="fa-solid fa-rotate-left"></i></button>
+                    </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+                    <div class="font-bold text-amber-300 flex items-center gap-1.5">
+                        <i class="fa-brands fa-chrome text-sm"></i> حل مشكلة حظر المتصفح (Mixed Content / PNA):
+                    </div>
+                    <p class="leading-relaxed text-[11px] text-slate-300">
+                        إذا كان السيرفر يعمل على جهازك (<code class="text-amber-300 font-mono">py server.py</code>) ولكن الواجهة تظهر "غير متصل"، فالمتصفح يمنع الاتصال بـ 127.0.0.1 لأن الموقع مفتوح عبر بروتوكول آمن (HTTPS).
+                    </p>
+                    <div class="bg-slate-950/70 p-3 rounded-lg border border-slate-800/80 text-[11px] space-y-1.5">
+                        <div class="font-bold text-emerald-400"><i class="fa-solid fa-circle-check ml-1"></i> خطوات التفعيل في كروم في ثانيتين:</div>
+                        <div>1. اضغط على أيقونة الإعدادات أو القفل 🔒 بجوار الرابط في شريط العنوان بالمتصفح.</div>
+                        <div>2. اختر <strong>إعدادات الموقع (Site settings)</strong>.</div>
+                        <div>3. ابحث عن خيار <strong>المحتوى غير الآمن (Insecure content)</strong> واجعله <strong>سماح (Allow)</strong>.</div>
+                        <div>4. أعد تحديث الصفحة، وسيتصل السيرفر باللون الأخضر فوراً!</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+                    <button onclick="testServerDirect()" class="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> اختبار السيرفر في المتصفح مباشرة
+                    </button>
+                    <button onclick="checkServerStatus(); closeServerTroubleshoot();" class="py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition">
+                        إعادة الفحص الآن
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- ربط ملفات الـ JavaScript المنفصلة بالترتيب -->
     <script src="./js/cloud-api.js"></script>
