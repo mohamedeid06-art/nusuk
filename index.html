@@ -36,11 +36,20 @@
             </div>
         </div>
 
-        <div class="flex items-center gap-4 mt-3 sm:mt-0">
+        <div class="flex items-center gap-3 mt-3 sm:mt-0">
+            <!-- شارة عداد البصمة للدورة الحالية -->
+            <div id="cycleBadge" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
+                <i class="fa-solid fa-arrows-rotate text-amber-400"></i>
+                <span class="text-slate-400">الدورة:</span>
+                <span id="cycleCount" class="text-amber-400 font-mono text-sm">0/5</span>
+            </div>
+
+            <!-- حالة السيرفر -->
             <div id="serverStatusBadge" class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
                 <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
                 <span id="statusText" class="text-slate-300">جاري فحص السيرفر...</span>
             </div>
+
             <button onclick="exportResultsToExcel()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-2 shadow">
                 <i class="fa-solid fa-file-excel"></i> تصدير التقرير
             </button>
@@ -137,7 +146,6 @@
                     <i class="fa-solid fa-users-plus"></i> إدخال بيانات المعتمرين
                 </h2>
 
-                <!-- رفع ملف إكسل -->
                 <label class="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 hover:border-amber-400 rounded-xl cursor-pointer bg-slate-900/50 transition mb-4">
                     <div class="flex flex-col items-center justify-center pt-3 pb-3">
                         <i class="fa-solid fa-cloud-arrow-up text-amber-400 text-xl mb-1"></i>
@@ -147,7 +155,6 @@
                     <input id="excelFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)" />
                 </label>
 
-                <!-- إضافة فردي سريع -->
                 <div class="space-y-2 border-t border-slate-800 pt-3">
                     <p class="text-xs text-slate-400 font-semibold">أو إضافة معتمر يدوياً:</p>
                     <div class="grid grid-cols-2 gap-2">
@@ -236,35 +243,40 @@
         </div>
     </main>
 
-    <!-- الكود البرمجي الكامل للواجهة -->
     <script>
         const API_BASE = "http://127.0.0.1:8000";
         let pilgrimsList = [];
         let isProcessing = false;
         let stopRequested = false;
 
-        // 1. فحص حالة السيرفر تلقائياً كل 3 ثواني
+        // 1. فحص حالة السيرفر وعداد الـ 5
         async function checkServerStatus() {
             const dot = document.getElementById("statusDot");
             const txt = document.getElementById("statusText");
             const badge = document.getElementById("serverStatusBadge");
+            const cycleCount = document.getElementById("cycleCount");
             try {
                 const res = await fetch(`${API_BASE}/api/status`);
                 if (res.ok) {
+                    const data = await res.json();
                     dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
                     txt.textContent = "السيرفر متصل وجاهز";
                     txt.className = "text-emerald-400";
                     badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
-                    return;
+                    if (data.count !== undefined) {
+                        cycleCount.textContent = `${data.count}/5`;
+                    }
+                    return true;
                 }
             } catch (e) {}
             dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
             txt.textContent = "السيرفر غير متصل";
             txt.className = "text-red-400";
             badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold";
+            return false;
         }
 
-        // 2. إدارة إعدادات الجنسية وتمييز الزرار المختار باللون الأصفر
+        // 2. إدارة إعدادات الجنسية
         function setNatPreset(countryText, optionVal) {
             document.getElementById("natText").value = countryText;
             document.getElementById("natOption").value = String(optionVal);
@@ -303,7 +315,7 @@
             highlightActiveNatButton(savedText, savedOpt);
         }
 
-        // 3. إدارة حسابات العملاء (Gmail + App Password)
+        // 3. إدارة حسابات العملاء
         function togglePassVisibility() {
             const passInput = document.getElementById("clientPass");
             const icon = document.getElementById("passEyeIcon");
@@ -473,7 +485,7 @@
             tbody.innerHTML = pilgrimsList.map((p, idx) => {
                 let badge = `<span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs">في الانتظار</span>`;
                 if (p.status === "processing") {
-                    badge = `<span class="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري التسجيل...</span>`;
+                    badge = `<span class="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> ${p.message || "جاري التسجيل..."}</span>`;
                 } else if (p.status === "completed") {
                     badge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs"><i class="fa-solid fa-check ml-1"></i> تم التسجيل</span>`;
                 } else if (p.status === "already_registered") {
@@ -533,7 +545,7 @@
             localStorage.setItem("nusuk_pilgrims_queue", JSON.stringify(pilgrimsList));
         }
 
-        // 6. إرسال المعتمر إلى السيرفر (مع إرسال الجنسية وترتيب الخيار)
+        // 6. إرسال المعتمر إلى السيرفر (مع دعم انتظار الريستارت تلقائياً دون إيقاف الطابور)
         async function processSinglePilgrim(idx) {
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
@@ -544,6 +556,7 @@
 
             const p = pilgrimsList[idx];
             p.status = "processing";
+            p.message = "جاري التسجيل...";
             renderPilgrimsTable();
 
             const natText = document.getElementById("natText").value.trim() || "تايلاند";
@@ -551,9 +564,14 @@
             const natY = natOpt === "2" ? 275 : 195;
 
             try {
+                // إعطاء مهلة تصل لـ 180 ثانية لتغطية وقت ريستارت المحاكي عند الحساب الخامس
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 180000);
+
                 const res = await fetch(`${API_BASE}/api/register`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
+                    signal: controller.signal,
                     body: JSON.stringify({
                         client_email: clientEmail,
                         client_pass: clientPass,
@@ -567,7 +585,10 @@
                         }
                     })
                 });
+
+                clearTimeout(timeoutId);
                 const data = await res.json();
+
                 if (data.status === "completed" || data.success) {
                     p.status = "completed";
                     p.otp = data.otp || p.otp;
@@ -584,6 +605,7 @@
                 p.message = "تعذر الاتصال بالسيرفر";
             }
 
+            checkServerStatus();
             savePilgrimsToStorage();
             renderPilgrimsTable();
             return true;
@@ -607,6 +629,8 @@
                 if (stopRequested) break;
                 if (pilgrimsList[i].status === "pending") {
                     await processSinglePilgrim(i);
+                    // مهلة أمان قصيرة بين كل طلب وطلب
+                    await new Promise(r => setTimeout(r, 2000));
                 }
             }
 
