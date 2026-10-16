@@ -32,24 +32,22 @@
             </div>
             <div>
                 <h1 class="text-xl font-extrabold text-amber-400 tracking-wide">Nusuk Automation Pro</h1>
-                <p class="text-xs text-slate-400">نظام التسجيل التلقائي الذكي وإدارة الحسابات</p>
+                <p class="text-xs text-slate-400">نظام التسجيل التلقائي الذكي وتدوير البصمات (5/5)</p>
             </div>
         </div>
 
-        <div class="flex items-center gap-3 mt-3 sm:mt-0">
-            <!-- شارة عداد البصمة للدورة الحالية -->
-            <div id="cycleBadge" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
-                <i class="fa-solid fa-arrows-rotate text-amber-400"></i>
-                <span class="text-slate-400">الدورة:</span>
-                <span id="cycleCount" class="text-amber-400 font-mono text-sm">0/5</span>
+        <div class="flex items-center gap-3 mt-3 sm:mt-0 flex-wrap">
+            <!-- عداد دورة البصمة الجديد في الشكل -->
+            <div id="cycleBadge" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-blue-950/60 border border-blue-500/40 text-xs font-bold text-blue-300">
+                <i class="fa-solid fa-arrows-rotate fa-spin"></i>
+                <span>دورة البصمة: <span id="cycleCounterText" class="text-white font-mono font-extrabold text-sm">0/5</span></span>
             </div>
 
-            <!-- حالة السيرفر -->
             <div id="serverStatusBadge" class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
                 <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
                 <span id="statusText" class="text-slate-300">جاري فحص السيرفر...</span>
             </div>
-
+            
             <button onclick="exportResultsToExcel()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-2 shadow">
                 <i class="fa-solid fa-file-excel"></i> تصدير التقرير
             </button>
@@ -58,7 +56,7 @@
 
     <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- العمود الأيمن: إدارة العملاء + إعدادات الجنسية + الإدخال -->
+        <!-- العمود الأيمن -->
         <div class="lg:col-span-4 space-y-6">
 
             <!-- 1. بطاقة حفظ وإدارة إيميلات العملاء -->
@@ -70,7 +68,6 @@
                     <span class="text-[11px] bg-amber-500/10 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/20">حفظ تلقائي</span>
                 </div>
 
-                <!-- قائمة العملاء المحفوظين -->
                 <div class="mb-3">
                     <label class="block text-xs text-slate-400 mb-1">اختر حساب عميل محفوظ:</label>
                     <div class="flex gap-2">
@@ -85,7 +82,6 @@
 
                 <hr class="border-slate-800 my-3">
 
-                <!-- حقول الإيميل والباسورد -->
                 <div class="space-y-3">
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">اسم المكتب / العميل (للحفظ):</label>
@@ -140,7 +136,7 @@
                 </div>
             </div>
 
-            <!-- 3. إضافة معتمرين (إكسل أو يدوي) -->
+            <!-- 3. إضافة معتمرين -->
             <div class="glass p-5 rounded-2xl shadow-lg">
                 <h2 class="text-base font-bold text-amber-400 mb-3 flex items-center gap-2">
                     <i class="fa-solid fa-users-plus"></i> إدخال بيانات المعتمرين
@@ -170,7 +166,7 @@
 
         </div>
 
-        <!-- العمود الأيسر: الإحصائيات + جدول الطابور والتشغيل -->
+        <!-- العمود الأيسر -->
         <div class="lg:col-span-8 space-y-6">
 
             <!-- بطاقات الإحصائيات -->
@@ -243,18 +239,19 @@
         </div>
     </main>
 
+    <!-- Script -->
     <script>
         const API_BASE = "http://127.0.0.1:8000";
         let pilgrimsList = [];
         let isProcessing = false;
         let stopRequested = false;
 
-        // 1. فحص حالة السيرفر وعداد الـ 5
+        // 1. فحص حالة السيرفر وتحديث عداد الـ 5 حسابات
         async function checkServerStatus() {
             const dot = document.getElementById("statusDot");
             const txt = document.getElementById("statusText");
             const badge = document.getElementById("serverStatusBadge");
-            const cycleCount = document.getElementById("cycleCount");
+            const cycleText = document.getElementById("cycleCounterText");
             try {
                 const res = await fetch(`${API_BASE}/api/status`);
                 if (res.ok) {
@@ -263,20 +260,20 @@
                     txt.textContent = "السيرفر متصل وجاهز";
                     txt.className = "text-emerald-400";
                     badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
+                    
                     if (data.count !== undefined) {
-                        cycleCount.textContent = `${data.count}/5`;
+                        cycleText.textContent = `${data.count}/5`;
                     }
-                    return true;
+                    return;
                 }
             } catch (e) {}
             dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
             txt.textContent = "السيرفر غير متصل";
             txt.className = "text-red-400";
             badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold";
-            return false;
         }
 
-        // 2. إدارة إعدادات الجنسية
+        // 2. إعدادات الجنسية
         function setNatPreset(countryText, optionVal) {
             document.getElementById("natText").value = countryText;
             document.getElementById("natOption").value = String(optionVal);
@@ -396,7 +393,7 @@
             renderSavedProfiles();
         }
 
-        // 4. قراءة الإكسل وإضافة المعتمرين
+        // 4. قراءة الإكسل
         function extractFromRow(row, keys) {
             for (const k of Object.keys(row)) {
                 const cleanK = k.trim().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").toLowerCase();
@@ -467,7 +464,7 @@
             renderPilgrimsTable();
         }
 
-        // 5. عرض الجدول والإحصائيات
+        // 5. عرض الجدول
         function renderPilgrimsTable() {
             const tbody = document.getElementById("pilgrimsTableBody");
             const clientEmail = document.getElementById("clientEmail").value.trim();
@@ -545,29 +542,29 @@
             localStorage.setItem("nusuk_pilgrims_queue", JSON.stringify(pilgrimsList));
         }
 
-        // 6. إرسال المعتمر إلى السيرفر (مع دعم انتظار الريستارت تلقائياً دون إيقاف الطابور)
+        // 6. إرسال الطلب مع مهلة 3 دقائق للريستارت
         async function processSinglePilgrim(idx) {
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
             if (!clientEmail || !clientPass) {
-                alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات (16 حرف) أولاً!");
+                alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات أولاً!");
                 return false;
             }
 
             const p = pilgrimsList[idx];
             p.status = "processing";
-            p.message = "جاري التسجيل...";
+            p.message = "جاري المعالجة والتسجيل...";
             renderPilgrimsTable();
 
             const natText = document.getElementById("natText").value.trim() || "تايلاند";
             const natOpt = document.getElementById("natOption").value;
             const natY = natOpt === "2" ? 275 : 195;
 
-            try {
-                // إعطاء مهلة تصل لـ 180 ثانية لتغطية وقت ريستارت المحاكي عند الحساب الخامس
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 180000);
+            // كنترولر مع مهلة 180 ثانية لمنع انقطاع الاتصال وقت الريستارت
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000);
 
+            try {
                 const res = await fetch(`${API_BASE}/api/register`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -585,10 +582,9 @@
                         }
                     })
                 });
-
                 clearTimeout(timeoutId);
-                const data = await res.json();
 
+                const data = await res.json();
                 if (data.status === "completed" || data.success) {
                     p.status = "completed";
                     p.otp = data.otp || p.otp;
@@ -601,13 +597,14 @@
                     p.message = data.error || data.message || "خطأ أثناء التنفيذ";
                 }
             } catch (err) {
+                clearTimeout(timeoutId);
                 p.status = "error";
-                p.message = "تعذر الاتصال بالسيرفر";
+                p.message = err.name === 'AbortError' ? "انتهت المهلة أثناء إعادة التشغيل" : "تعذر الاتصال بالسيرفر";
             }
 
-            checkServerStatus();
             savePilgrimsToStorage();
             renderPilgrimsTable();
+            checkServerStatus(); // تحديث العداد
             return true;
         }
 
@@ -629,8 +626,6 @@
                 if (stopRequested) break;
                 if (pilgrimsList[i].status === "pending") {
                     await processSinglePilgrim(i);
-                    // مهلة أمان قصيرة بين كل طلب وطلب
-                    await new Promise(r => setTimeout(r, 2000));
                 }
             }
 
@@ -643,7 +638,7 @@
             stopRequested = true;
         }
 
-        // 7. تصدير النتائج إلى ملف Excel
+        // 7. تصدير إكسل
         function exportResultsToExcel() {
             if (pilgrimsList.length === 0) {
                 alert("لا توجد بيانات لتصديرها!");
@@ -663,7 +658,6 @@
             XLSX.writeFile(wb, `Nusuk_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
 
-        // تهيئة الصفحة عند الفتح
         window.addEventListener("DOMContentLoaded", () => {
             document.getElementById("clientEmail").value = localStorage.getItem("nusuk_active_email") || "";
             document.getElementById("clientPass").value = localStorage.getItem("nusuk_active_pass") || "";
