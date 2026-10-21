@@ -32,15 +32,21 @@
             </div>
             <div>
                 <h1 class="text-xl font-extrabold text-amber-400 tracking-wide">Nusuk Automation Pro</h1>
-                <p class="text-xs text-slate-400">نظام التسجيل التلقائي الذكي وتدوير البصمات (5/5)</p>
+                <p class="text-xs text-slate-400">نظام التسجيل والربط التلقائي للمجموعات (محاكي 1 رئيسي + محاكي 2 مرافقين)</p>
             </div>
         </div>
 
-        <div class="flex items-center gap-3 mt-3 sm:mt-0 flex-wrap">
-            <!-- عداد دورة البصمة الجديد في الشكل -->
-            <div id="cycleBadge" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-blue-950/60 border border-blue-500/40 text-xs font-bold text-blue-300">
-                <i class="fa-solid fa-arrows-rotate fa-spin"></i>
-                <span>دورة البصمة: <span id="cycleCounterText" class="text-white font-mono font-extrabold text-sm">0/5</span></span>
+        <div class="flex items-center gap-2.5 mt-3 sm:mt-0 flex-wrap">
+            <!-- عداد دورة بصمة المحاكي 1 (الرئيسي) -->
+            <div class="flex items-center gap-2 px-3 py-2 rounded-full bg-blue-950/60 border border-blue-500/40 text-xs font-bold text-blue-300">
+                <i class="fa-solid fa-crown text-amber-400"></i>
+                <span>بصمة محاكي 1: <span id="emu1CounterText" class="text-white font-mono font-extrabold text-sm">0/5</span></span>
+            </div>
+
+            <!-- عداد دورة بصمة المحاكي 2 (المرافقين) -->
+            <div class="flex items-center gap-2 px-3 py-2 rounded-full bg-purple-950/60 border border-purple-500/40 text-xs font-bold text-purple-300">
+                <i class="fa-solid fa-user-group text-purple-400"></i>
+                <span>بصمة محاكي 2: <span id="emu2CounterText" class="text-white font-mono font-extrabold text-sm">0/5</span></span>
             </div>
 
             <div id="serverStatusBadge" class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold">
@@ -169,6 +175,52 @@
         <!-- العمود الأيسر -->
         <div class="lg:col-span-8 space-y-6">
 
+            <!-- بطاقة متابعة حالة المجموعة الحالية (الحساب الرئيسي + 3 مرافقين) -->
+            <div class="glass p-5 rounded-2xl border border-amber-500/30 shadow-lg">
+                <div class="flex flex-wrap justify-between items-center gap-3 pb-3 mb-3 border-b border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3 h-3 rounded-full bg-amber-400 animate-ping"></span>
+                        <h3 class="text-sm font-extrabold text-amber-400">حالة المجموعة الحالية والربط التلقائي:</h3>
+                        <span id="nextTargetBadge" class="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
+                            الدور القادم: حساب رئيسي جديد (محاكي 1)
+                        </span>
+                    </div>
+
+                    <button id="btnForceCloseGroup" onclick="forceCloseCurrentGroup()" class="hidden px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-right-from-bracket"></i> إنهاء المجموعة الحالية وتسجيل خروج الرئيسي
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- بيانات الحساب الرئيسي (المحاكي 1) -->
+                    <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-3.5">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-crown"></i> الحساب الرئيسي (محاكي 1 - Index 21)
+                            </span>
+                            <span id="leaderStateBadge" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">في انتظار التسجيل</span>
+                        </div>
+                        <div class="text-xs space-y-1 text-slate-300">
+                            <div>الاسم: <span id="leaderNameDisplay" class="font-bold text-white">-</span></div>
+                            <div>Nusuk ID: <span id="leaderIdDisplay" class="font-mono font-bold text-amber-300" dir="ltr">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- بيانات المرافقين (المحاكي 2) -->
+                    <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-3.5">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-users"></i> المرافقون المرتبطون (محاكي 2 - Index 20)
+                            </span>
+                            <span id="companionsCountBadge" class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-500/30">0 / 3</span>
+                        </div>
+                        <div id="companionsListDisplay" class="space-y-1 text-xs text-slate-400">
+                            <div>لم يتم ربط مرافقين في هذه المجموعة بعد.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- بطاقات الإحصائيات -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div class="glass p-4 rounded-2xl border-r-4 border-blue-500">
@@ -176,11 +228,11 @@
                     <p id="statTotal" class="text-2xl font-extrabold text-white mt-1">0</p>
                 </div>
                 <div class="glass p-4 rounded-2xl border-r-4 border-emerald-500">
-                    <p class="text-xs text-slate-400">تم التسجيل بنجاح</p>
+                    <p class="text-xs text-slate-400">تم التسجيل والربط</p>
                     <p id="statSuccess" class="text-2xl font-extrabold text-emerald-400 mt-1">0</p>
                 </div>
                 <div class="glass p-4 rounded-2xl border-r-4 border-amber-500">
-                    <p class="text-xs text-slate-400">مسجل مسبقاً</p>
+                    <p class="text-xs text-slate-400">مسجل مسبقاً (تم تخطيه)</p>
                     <p id="statAlready" class="text-2xl font-extrabold text-amber-400 mt-1">0</p>
                 </div>
                 <div class="glass p-4 rounded-2xl border-r-4 border-red-500">
@@ -220,7 +272,7 @@
                                 <th class="py-3.5 px-4">رقم الجواز</th>
                                 <th class="py-3.5 px-4">رقم التأشيرة</th>
                                 <th class="py-3.5 px-4">الإيميل المستخدم</th>
-                                <th class="py-3.5 px-4">كود OTP</th>
+                                <th class="py-3.5 px-4">الدور / Nusuk ID</th>
                                 <th class="py-3.5 px-4">الحالة</th>
                                 <th class="py-3.5 px-4 text-center">إجراء</th>
                             </tr>
@@ -246,12 +298,14 @@
         let isProcessing = false;
         let stopRequested = false;
 
-        // 1. فحص حالة السيرفر وتحديث عداد الـ 5 حسابات
+        // 1. فحص حالة السيرفر وتحديث عدادي البصمة وحالة المجموعة
         async function checkServerStatus() {
             const dot = document.getElementById("statusDot");
             const txt = document.getElementById("statusText");
             const badge = document.getElementById("serverStatusBadge");
-            const cycleText = document.getElementById("cycleCounterText");
+            const emu1Txt = document.getElementById("emu1CounterText");
+            const emu2Txt = document.getElementById("emu2CounterText");
+
             try {
                 const res = await fetch(`${API_BASE}/api/status`);
                 if (res.ok) {
@@ -261,9 +315,50 @@
                     txt.className = "text-emerald-400";
                     badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
                     
-                    if (data.count !== undefined) {
-                        cycleText.textContent = `${data.count}/5`;
+                    // تحديث عدادات البصمة للمحاكيين
+                    if (data.emu1_counter !== undefined) emu1Txt.textContent = `${data.emu1_counter}/5`;
+                    if (data.emu2_counter !== undefined) emu2Txt.textContent = `${data.emu2_counter}/5`;
+
+                    // تحديث شريط التوجيه للدور القادم
+                    const nextBadge = document.getElementById("nextTargetBadge");
+                    if (data.next_target) {
+                        nextBadge.textContent = `الدور القادم: ${data.next_target}`;
+                        nextBadge.className = data.leader_active
+                            ? "px-3 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold"
+                            : "px-3 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-bold";
                     }
+
+                    // تحديث بيانات الحساب الرئيسي (المحاكي 1)
+                    const closeBtn = document.getElementById("btnForceCloseGroup");
+                    const leaderStateBadge = document.getElementById("leaderStateBadge");
+                    if (data.leader_active) {
+                        leaderStateBadge.textContent = "نشط وينتظر المرافقين";
+                        leaderStateBadge.className = "text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold";
+                        document.getElementById("leaderNameDisplay").textContent = data.leader_name || "معتمر رئيسي";
+                        document.getElementById("leaderIdDisplay").textContent = data.leader_id || "-";
+                        closeBtn.classList.remove("hidden");
+                    } else {
+                        leaderStateBadge.textContent = "لا يوجد رئيسي نشط";
+                        leaderStateBadge.className = "text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400";
+                        document.getElementById("leaderNameDisplay").textContent = "-";
+                        document.getElementById("leaderIdDisplay").textContent = "-";
+                        closeBtn.classList.add("hidden");
+                    }
+
+                    // تحديث قائمة المرافقين (المحاكي 2)
+                    document.getElementById("companionsCountBadge").textContent = `${data.companions_count || 0} / ${data.max_companions || 3}`;
+                    const compContainer = document.getElementById("companionsListDisplay");
+                    if (data.companions && data.companions.length > 0) {
+                        compContainer.innerHTML = data.companions.map((c, i) => `
+                            <div class="flex justify-between items-center bg-slate-800/70 px-2.5 py-1 rounded border border-slate-700/60">
+                                <span class="text-white font-semibold">${i + 1}. ${c.name}</span>
+                                <span class="font-mono text-amber-300" dir="ltr">ID: ${c.id}</span>
+                            </div>
+                        `).join("");
+                    } else {
+                        compContainer.innerHTML = `<div class="text-slate-500">لم يتم ربط مرافقين في هذه المجموعة بعد.</div>`;
+                    }
+
                     return;
                 }
             } catch (e) {}
@@ -271,6 +366,19 @@
             txt.textContent = "السيرفر غير متصل";
             txt.className = "text-red-400";
             badge.className = "flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold";
+        }
+
+        // إنهاء المجموعة الحالية يدوياً وتسجيل خروج الحساب الرئيسي
+        async function forceCloseCurrentGroup() {
+            if (!confirm("هل تريد إنهاء المجموعة الحالية وتسجيل خروج الحساب الرئيسي من المحاكي الأول الآن؟")) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/force-close-group`, { method: "POST" });
+                const data = await res.json();
+                alert(data.message || "تم إنهاء المجموعة");
+                checkServerStatus();
+            } catch (e) {
+                alert("تعذر الاتصال بالسيرفر");
+            }
         }
 
         // 2. إعدادات الجنسية
@@ -427,7 +535,8 @@
                             passport: passport,
                             visa: visa,
                             email: email,
-                            otp: "-",
+                            roleInfo: "-",
+                            nusukId: "-",
                             status: "pending",
                             message: "في الانتظار"
                         });
@@ -453,7 +562,8 @@
                 passport,
                 visa,
                 email,
-                otp: "-",
+                roleInfo: "-",
+                nusukId: "-",
                 status: "pending",
                 message: "في الانتظار"
             });
@@ -484,9 +594,9 @@
                 if (p.status === "processing") {
                     badge = `<span class="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> ${p.message || "جاري التسجيل..."}</span>`;
                 } else if (p.status === "completed") {
-                    badge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs"><i class="fa-solid fa-check ml-1"></i> تم التسجيل</span>`;
+                    badge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs"><i class="fa-solid fa-check ml-1"></i> ${p.message || "تم التسجيل"}</span>`;
                 } else if (p.status === "already_registered") {
-                    badge = `<span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs"><i class="fa-solid fa-triangle-exclamation ml-1"></i> مسجل مسبقاً</span>`;
+                    badge = `<span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs"><i class="fa-solid fa-triangle-exclamation ml-1"></i> مسجل مسبقاً (تم تخطيه)</span>`;
                 } else if (p.status === "error") {
                     badge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 text-xs"><i class="fa-solid fa-xmark ml-1"></i> ${p.message || "فشل"}</span>`;
                 }
@@ -497,7 +607,10 @@
                         <td class="py-3 px-4 font-mono text-amber-300" dir="ltr">${p.passport}</td>
                         <td class="py-3 px-4 font-mono text-slate-200" dir="ltr">${p.visa}</td>
                         <td class="py-3 px-4 text-xs text-slate-300" dir="ltr">${p.email || clientEmail || "-"}</td>
-                        <td class="py-3 px-4 font-mono font-bold text-emerald-400">${p.otp || "-"}</td>
+                        <td class="py-3 px-4 text-xs">
+                            <div class="font-bold text-emerald-400">${p.roleInfo || "-"}</div>
+                            <div class="font-mono text-[11px] text-slate-400" dir="ltr">${p.nusukId && p.nusukId !== "-" ? "ID: " + p.nusukId : ""}</div>
+                        </td>
                         <td class="py-3 px-4">${badge}</td>
                         <td class="py-3 px-4 text-center">
                             <div class="flex items-center justify-center gap-1">
@@ -542,7 +655,7 @@
             localStorage.setItem("nusuk_pilgrims_queue", JSON.stringify(pilgrimsList));
         }
 
-        // 6. إرسال الطلب مع مهلة 3 دقائق للريستارت
+        // 6. إرسال الطلب مع مهلة 4 دقائق للريستارت والربط
         async function processSinglePilgrim(idx) {
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
@@ -553,16 +666,15 @@
 
             const p = pilgrimsList[idx];
             p.status = "processing";
-            p.message = "جاري المعالجة والتسجيل...";
+            p.message = "جاري التسجيل والربط...";
             renderPilgrimsTable();
 
             const natText = document.getElementById("natText").value.trim() || "تايلاند";
             const natOpt = document.getElementById("natOption").value;
             const natY = natOpt === "2" ? 275 : 195;
 
-            // كنترولر مع مهلة 180 ثانية لمنع انقطاع الاتصال وقت الريستارت
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 180000);
+            const timeoutId = setTimeout(() => controller.abort(), 240000);
 
             try {
                 const res = await fetch(`${API_BASE}/api/register`, {
@@ -585,12 +697,20 @@
                 clearTimeout(timeoutId);
 
                 const data = await res.json();
-                if (data.status === "completed" || data.success) {
+                if (data.success) {
                     p.status = "completed";
-                    p.otp = data.otp || p.otp;
-                    p.message = "تم التسجيل بنجاح";
+                    if (data.role === "leader") {
+                        p.roleInfo = `رئيسي (${data.leader_name || "محاكي 1"})`;
+                        p.nusukId = data.leader_id || "-";
+                        p.message = "تم التسجيل كرئيسي";
+                    } else {
+                        p.roleInfo = `مرافق (${data.companion_name || "محاكي 2"})`;
+                        p.nusukId = data.companion_id || "-";
+                        p.message = data.message || "تم الربط بنجاح";
+                    }
                 } else if (data.status === "already_registered") {
                     p.status = "already_registered";
+                    p.roleInfo = "تم تخطيه";
                     p.message = "مسجل مسبقاً";
                 } else {
                     p.status = "error";
@@ -604,7 +724,7 @@
 
             savePilgrimsToStorage();
             renderPilgrimsTable();
-            checkServerStatus(); // تحديث العداد
+            await checkServerStatus();
             return true;
         }
 
@@ -649,7 +769,8 @@
                 "رقم الجواز": p.passport,
                 "رقم التأشيرة": p.visa,
                 "الإيميل": p.email || document.getElementById("clientEmail").value.trim(),
-                "كود OTP": p.otp,
+                "الدور في المجموعة": p.roleInfo || "-",
+                "Nusuk ID": p.nusukId || "-",
                 "الحالة": p.message
             }));
             const ws = XLSX.utils.json_to_sheet(exportData);
@@ -672,7 +793,7 @@
             renderPilgrimsTable();
 
             checkServerStatus();
-            setInterval(checkServerStatus, 3000);
+            setInterval(checkServerStatus, 2500);
         });
     </script>
 </body>
