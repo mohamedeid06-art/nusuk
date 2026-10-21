@@ -758,25 +758,60 @@
             stopRequested = true;
         }
 
-        // 7. تصدير إكسل
+        // 7. تصدير إكسل بنفس الشكل الاحترافي المنظم
         function exportResultsToExcel() {
             if (pilgrimsList.length === 0) {
                 alert("لا توجد بيانات لتصديرها!");
                 return;
             }
-            const exportData = pilgrimsList.map((p, i) => ({
-                "#": i + 1,
-                "رقم الجواز": p.passport,
-                "رقم التأشيرة": p.visa,
-                "الإيميل": p.email || document.getElementById("clientEmail").value.trim(),
-                "الدور في المجموعة": p.roleInfo || "-",
-                "Nusuk ID": p.nusukId || "-",
-                "الحالة": p.message
-            }));
+
+            const clientEmail = document.getElementById("clientEmail").value.trim();
+
+            const exportData = pilgrimsList.map((p, i) => {
+                let cleanStatus = p.message || "-";
+                if (cleanStatus.includes("UiObjectNotFoundException")) {
+                    cleanStatus = "فشل (خطأ واجهة المستخدم)";
+                }
+
+                return {
+                    "م": i + 1,
+                    "الاسم": p.raw ? (p.raw["الاسم"] || p.raw["اسم المعتمر"] || p.raw["Name"] || "-") : "-",
+                    "الجنس": p.raw ? (p.raw["الجنس"] || p.raw["النوع"] || p.raw["Gender"] || "-") : "-",
+                    "رقم الجواز": p.passport || "-",
+                    "رقم التأشيرة": p.visa || "-",
+                    "الدور في المجموعة": p.roleInfo || "غير محدد",
+                    "Nusuk ID": (p.nusukId && p.nusukId !== "-") ? String(p.nusukId) : "-",
+                    "حالة التسجيل في نسك": cleanStatus,
+                    "البريد الإلكتروني": p.email || clientEmail || "-",
+                    "حالة الحجز": p.raw ? (p.raw["حالة الحجز"] || "") : "",
+                    "موعد الحجز": p.raw ? (p.raw["موعد الحجز"] || "") : ""
+                };
+            });
+
             const ws = XLSX.utils.json_to_sheet(exportData);
+
+            if (!ws['!views']) ws['!views'] = [];
+            ws['!views'].push({ rightToLeft: true });
+
+            ws['!cols'] = [
+                { wch: 6 },   // م
+                { wch: 28 },  // الاسم
+                { wch: 10 },  // الجنس
+                { wch: 16 },  // رقم الجواز
+                { wch: 16 },  // رقم التأشيرة
+                { wch: 32 },  // الدور في المجموعة
+                { wch: 20 },  // Nusuk ID
+                { wch: 34 },  // حالة التسجيل في نسك
+                { wch: 38 },  // البريد الإلكتروني
+                { wch: 14 },  // حالة الحجز
+                { wch: 14 }   // موعد الحجز
+            ];
+
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "تقرير نسك");
-            XLSX.writeFile(wb, `Nusuk_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+            XLSX.utils.book_append_sheet(wb, ws, "بيانات المعتمرين وحالة نسك");
+
+            const today = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `تقرير_نسك_المنسق_${today}.xlsx`);
         }
 
         window.addEventListener("DOMContentLoaded", () => {
