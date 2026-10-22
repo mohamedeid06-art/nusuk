@@ -3,57 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة نسك الملكية للأتمتة | Nusuk Royal Pro V4</title>
+    <title>منصة نسك الملكية للأتمتة | Nusuk Royal Pro V5</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS لقراءة وتصدير ملفات الإكسل -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Font Awesome للأيقونات -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- خط Cairo & Tajawal -->
+    <!-- خط Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
-            --gold-primary: #d4af37;
-            --gold-light: #fde047;
+            --gold-primary: #f59e0b;
             --emerald-glow: #10b981;
         }
         body {
             font-family: 'Cairo', sans-serif;
-            background-color: #060911;
+            background-color: #050811;
             color: #f8fafc;
             background-image: 
-                radial-gradient(circle at 15% 10%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 85% 5%, rgba(212, 175, 55, 0.09) 0%, transparent 45%),
-                linear-gradient(180deg, #090d16 0%, #060911 100%);
+                radial-gradient(circle at 10% 15%, rgba(16, 185, 129, 0.07) 0%, transparent 35%),
+                radial-gradient(circle at 90% 10%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
+                linear-gradient(180deg, #070b14 0%, #050811 100%);
         }
-        /* الكروت الزجاجية الفاخرة */
+
+        /* الكروت الرئيسية */
         .royal-card {
-            background: rgba(15, 23, 42, 0.78);
-            backdrop-filter: blur(16px);
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.07);
-            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.5);
         }
+
+        /* تصميم جديد كلياً للقائمة الجانبية (Smart Control Dock) */
+        .sidebar-dock-card {
+            background: linear-gradient(160deg, rgba(19, 28, 49, 0.9) 0%, rgba(10, 15, 28, 0.95) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-right: 3px solid #f59e0b;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+            transition: all 0.25s ease;
+        }
+        .sidebar-dock-card:hover {
+            border-color: rgba(245, 158, 11, 0.35);
+            border-right-color: #fbbf24;
+            transform: translateY(-2px);
+        }
+
+        /* حقول الإدخال الشيك في الجنب */
+        .sleek-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .sleek-input-icon {
+            position: absolute;
+            right: 12px;
+            color: #64748b;
+            font-size: 13px;
+            pointer-events: none;
+            transition: color 0.2s;
+        }
+        .sleek-input {
+            width: 100%;
+            background: rgba(6, 10, 20, 0.85);
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            border-radius: 12px;
+            padding: 9px 36px 9px 12px;
+            font-size: 12px;
+            color: #f8fafc;
+            transition: all 0.2s;
+            outline: none;
+        }
+        .sleek-input:focus {
+            border-color: #f59e0b;
+            background: rgba(15, 23, 42, 0.95);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+        }
+        .sleek-input:focus + .sleek-input-icon,
+        .sleek-input-wrap:focus-within .sleek-input-icon {
+            color: #f59e0b;
+        }
+
         .royal-card-gold {
-            background: linear-gradient(145deg, rgba(24, 33, 53, 0.85) 0%, rgba(12, 18, 32, 0.92) 100%);
-            border: 1px solid rgba(212, 175, 55, 0.28);
-            box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            background: linear-gradient(145deg, rgba(22, 31, 51, 0.88) 0%, rgba(11, 16, 29, 0.95) 100%);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.1);
         }
         .gold-gradient-btn {
-            background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
             color: #020617;
         }
         .gold-gradient-btn:hover {
-            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
-            box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+            background: linear-gradient(135deg, #fde047 0%, #f59e0b 100%);
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.45);
         }
         .emerald-gradient-btn {
             background: linear-gradient(135deg, #10b981 0%, #047857 100%);
         }
         .emerald-gradient-btn:hover {
             background: linear-gradient(135deg, #34d399 0%, #059669 100%);
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
         }
+
         .admin-node-active {
             border-color: #f59e0b !important;
             box-shadow: 0 0 30px rgba(245, 158, 11, 0.22), inset 0 0 15px rgba(245, 158, 11, 0.08);
@@ -71,13 +122,15 @@
             50% { border-color: rgba(56, 189, 248, 0.95); background: rgba(56, 189, 248, 0.08); box-shadow: 0 0 18px rgba(56, 189, 248, 0.2); }
         }
         .nat-btn-active {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important;
             color: #020617 !important;
-            border-color: #fbbf24 !important;
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+            border-color: #fde047 !important;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35);
+            transform: scale(1.03);
         }
+
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-track { background: #070b14; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
     </style>
@@ -87,7 +140,7 @@
     <!-- 🌟 Top Royal Header 🌟 -->
     <header class="max-w-7xl mx-auto mb-6 royal-card-gold p-4 md:px-6 rounded-2xl flex flex-wrap justify-between items-center gap-4">
         <div class="flex items-center gap-3.5">
-            <div class="w-13 h-13 p-3 rounded-2xl gold-gradient-btn flex items-center justify-center text-slate-950 font-bold text-2xl shadow-lg">
+            <div class="w-12 h-12 rounded-2xl gold-gradient-btn flex items-center justify-center text-slate-950 font-bold text-2xl shadow-lg">
                 <i class="fa-solid fa-kaaba"></i>
             </div>
             <div>
@@ -96,7 +149,7 @@
                         Nusuk Royal Studio
                     </h1>
                     <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-extrabold">
-                        PRO V4.0
+                        V5.0 VIP
                     </span>
                 </div>
                 <p class="text-xs text-slate-400 mt-0.5">منظومة الربط العائلي الذكي وتوزيع المجموعات (1 أدمن رئيسي + 3 مرافقين)</p>
@@ -127,7 +180,7 @@
 
             <!-- زر طباعة كروت المجموعات PDF -->
             <button onclick="printGroupsToPDF()" class="px-4 py-2 rounded-xl gold-gradient-btn text-xs font-black transition flex items-center gap-2 shadow-lg">
-                <i class="fa-solid fa-file-pdf text-sm"></i> طباعة كروت المجموعات PDF
+                <i class="fa-solid fa-print text-sm"></i> طباعة كروت الأسماء PDF
             </button>
 
             <!-- زر تصدير الإكسل -->
@@ -140,76 +193,118 @@
     <!-- 🌟 Main Grid 🌟 -->
     <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- العمود الأيمن: الإعدادات وإدخال البيانات (4 أعمدة) -->
-        <div class="lg:col-span-4 space-y-6">
+        <!-- 🎨 العمود الأيمن بالتصميم الجديد: الكابينة الجانبية الذكية (Smart Control Dock) 🎨 -->
+        <aside class="lg:col-span-4 space-y-5">
 
-            <!-- 1. حسابات استلام الكود OTP -->
-            <div class="royal-card p-5 rounded-2xl">
-                <div class="flex justify-between items-center mb-4 pb-2.5 border-b border-slate-800">
-                    <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
-                        <i class="fa-solid fa-envelope-circle-check text-base"></i> بريد استلام الكود (OTP)
-                    </h2>
-                    <span class="text-[10px] bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/20 font-bold">تخزين آمن</span>
+            <!-- الكارت الجانبي 1: مركز حسابات الـ OTP -->
+            <div class="sidebar-dock-card rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-black text-white">مركز استلام الكود (OTP)</h2>
+                            <p class="text-[10px] text-slate-400">ربط تلقائي ببريد Gmail</p>
+                        </div>
+                    </div>
+                    <span class="text-[10px] bg-emerald-500/10 text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-500/25 font-extrabold">
+                        <i class="fa-solid fa-lock text-[9px] ml-1"></i>محفوظ
+                    </span>
                 </div>
 
-                <div class="mb-3">
-                    <label class="block text-xs text-slate-400 mb-1.5">الحسابات المحفوظة:</label>
+                <!-- اختيار سريع للحسابات المحفوظة -->
+                <div class="mb-3.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <label class="block text-[11px] text-amber-300/90 font-bold mb-1.5">
+                        <i class="fa-solid fa-folder-open ml-1"></i>تبديل سريع بين المكاتب المحفوظة:
+                    </label>
                     <div class="flex gap-2">
-                        <select id="savedProfilesSelect" onchange="loadSelectedProfile()" class="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
-                            <option value="">-- اختر حساب عميل محفوظ --</option>
+                        <select id="savedProfilesSelect" onchange="loadSelectedProfile()" class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
+                            <option value="">-- اختر مكتب / إيميل محفوظ --</option>
                         </select>
-                        <button onclick="deleteSelectedProfile()" title="حذف الحساب" class="px-3 py-2 bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white rounded-xl transition">
+                        <button onclick="deleteSelectedProfile()" title="حذف هذا المكتب" class="px-3 py-2 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 rounded-xl transition">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     </div>
                 </div>
 
+                <!-- حقول الإيميل والباسورد بالتصميم الأنيق -->
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">اسم المكتب / المجموعة:</label>
-                        <input id="profileName" type="text" placeholder="مثال: شركة الطيار - فوج أكتوبر" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-400">
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">اسم المكتب أو الفوج (يظهر في الطباعة):</label>
+                        <div class="sleek-input-wrap">
+                            <input id="profileName" type="text" placeholder="مثال: فوج إبراهيم الطيار - 30 أكتوبر" class="sleek-input">
+                            <i class="fa-solid fa-building-user sleek-input-icon"></i>
+                        </div>
                     </div>
+
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">إيميل الجيميل (Gmail):</label>
-                        <input id="clientEmail" type="email" dir="ltr" placeholder="example@gmail.com" oninput="saveActiveCredentials()" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-left font-mono focus:outline-none focus:border-amber-400">
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">البريد الإلكتروني الأساسي (Gmail):</label>
+                        <div class="sleek-input-wrap">
+                            <input id="clientEmail" type="email" dir="ltr" placeholder="office@gmail.com" oninput="saveActiveCredentials()" class="sleek-input text-left font-mono">
+                            <i class="fa-solid fa-at sleek-input-icon"></i>
+                        </div>
                     </div>
+
                     <div>
-                        <label class="block text-xs text-slate-400 mb-1">باسورد التطبيقات (App Password):</label>
-                        <div class="relative">
-                            <input id="clientPass" type="password" dir="ltr" placeholder="xxxx xxxx xxxx xxxx" oninput="saveActiveCredentials()" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-left font-mono focus:outline-none focus:border-amber-400">
-                            <button type="button" onclick="togglePassVisibility()" class="absolute left-3 top-2 text-slate-400 hover:text-white text-xs">
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">كلمة مرور التطبيقات (16 حرف):</label>
+                        <div class="sleek-input-wrap">
+                            <input id="clientPass" type="password" dir="ltr" placeholder="xxxx xxxx xxxx xxxx" oninput="saveActiveCredentials()" class="sleek-input text-left font-mono pl-9">
+                            <i class="fa-solid fa-key sleek-input-icon"></i>
+                            <button type="button" onclick="togglePassVisibility()" class="absolute left-3 text-slate-400 hover:text-amber-400 text-xs">
                                 <i id="passEyeIcon" class="fa-solid fa-eye"></i>
                             </button>
                         </div>
                     </div>
-                    <button onclick="saveCurrentProfile()" class="w-full py-2.5 rounded-xl gold-gradient-btn font-extrabold text-xs transition flex items-center justify-center gap-2 shadow">
-                        <i class="fa-solid fa-bookmark"></i> حفظ بيانات الإيميل
+
+                    <button onclick="saveCurrentProfile()" class="w-full py-2.5 rounded-xl gold-gradient-btn font-black text-xs transition flex items-center justify-center gap-2 shadow-lg mt-1">
+                        <i class="fa-solid fa-floppy-disk"></i> حفظ بيانات المكتب في القائمة
                     </button>
                 </div>
             </div>
 
-            <!-- 2. إعدادات الجنسية الذكية -->
-            <div class="royal-card p-5 rounded-2xl">
-                <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
-                    <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
-                        <i class="fa-solid fa-globe text-base"></i> الجنسية الافتراضية
-                    </h2>
-                    <span class="text-[10px] text-slate-400">تبديل عربي/إنجليزي تلقائي</span>
-                </div>
-                <div class="space-y-3">
-                    <div class="grid grid-cols-3 gap-2">
-                        <button id="btnNatEgypt" type="button" onclick="setNatPreset('مصر', '2')" class="nat-preset-btn py-2 px-2 rounded-xl bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-xs font-bold border border-slate-800 transition">🇪🇬 مصر (2)</button>
-                        <button id="btnNatThailand" type="button" onclick="setNatPreset('تايلاند', '1')" class="nat-preset-btn py-2 px-2 rounded-xl bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-xs font-bold border border-slate-800 transition">🇹🇭 تايلاند (1)</button>
-                        <button id="btnNatMorocco" type="button" onclick="setNatPreset('المغرب', '1')" class="nat-preset-btn py-2 px-2 rounded-xl bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-xs font-bold border border-slate-800 transition">🇲🇦 المغرب (1)</button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="block text-[11px] text-slate-400 mb-1">اسم الدولة:</label>
-                            <input id="natText" type="text" value="مصر" oninput="saveNatSettings()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-400">
+            <!-- الكارت الجانبي 2: كبسولة الجنسية الذكية -->
+            <div class="sidebar-dock-card rounded-2xl p-5" style="border-right-color: #10b981;">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow">
+                            <i class="fa-solid fa-earth-africa"></i>
                         </div>
                         <div>
-                            <label class="block text-[11px] text-slate-400 mb-1">موقع الاختيار:</label>
-                            <select id="natOption" onchange="saveNatSettings()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none focus:border-amber-400">
+                            <h2 class="text-sm font-black text-white">بوصلة الجنسية التلقائية</h2>
+                            <p class="text-[10px] text-slate-400">يتعرف على لغة المحاكي فوراً</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <label class="block text-[11px] text-slate-400 font-bold">اختر الدولة بضغطة واحدة:</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btnNatEgypt" type="button" onclick="setNatPreset('مصر', '2')" class="nat-preset-btn py-2.5 px-2 rounded-xl bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-xs font-extrabold border border-slate-800 transition flex flex-col items-center gap-1">
+                            <span class="text-base">🇪🇬</span>
+                            <span>مصر</span>
+                        </button>
+                        <button id="btnNatThailand" type="button" onclick="setNatPreset('تايلاند', '1')" class="nat-preset-btn py-2.5 px-2 rounded-xl bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-xs font-extrabold border border-slate-800 transition flex flex-col items-center gap-1">
+                            <span class="text-base">🇹🇭</span>
+                            <span>تايلاند</span>
+                        </button>
+                        <button id="btnNatMorocco" type="button" onclick="setNatPreset('المغرب', '1')" class="nat-preset-btn py-2.5 px-2 rounded-xl bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-xs font-extrabold border border-slate-800 transition flex flex-col items-center gap-1">
+                            <span class="text-base">🇲🇦</span>
+                            <span>المغرب</span>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5 pt-1">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-bold mb-1">الكتابة في البحث:</label>
+                            <div class="sleek-input-wrap">
+                                <input id="natText" type="text" value="مصر" oninput="saveNatSettings()" class="sleek-input font-bold">
+                                <i class="fa-solid fa-flag sleek-input-icon"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-bold mb-1">ترتيب القائمة:</label>
+                            <select id="natOption" onchange="saveNatSettings()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400">
                                 <option value="1">الخيار الأول (195)</option>
                                 <option value="2" selected>الخيار الثاني (275)</option>
                             </select>
@@ -218,48 +313,79 @@
                 </div>
             </div>
 
-            <!-- 3. رفع شيت الإكسل أو الإضافة اليدوية -->
-            <div class="royal-card p-5 rounded-2xl">
-                <h2 class="text-sm font-extrabold text-amber-400 mb-3 pb-2 border-b border-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-file-import text-base"></i> إدخال بيانات المعتمرين
-                </h2>
-
-                <label class="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-amber-500/40 hover:border-amber-400 rounded-2xl cursor-pointer bg-slate-950/60 hover:bg-slate-900/80 transition mb-4 group">
-                    <div class="flex flex-col items-center justify-center pt-3 pb-3">
-                        <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 mb-1.5 group-hover:scale-110 transition">
-                            <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+            <!-- الكارت الجانبي 3: بوابة إدخال المعتمرين (التبويب المزدوج الشيك) -->
+            <div class="sidebar-dock-card rounded-2xl p-5" style="border-right-color: #38bdf8;">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow">
+                            <i class="fa-solid fa-users-gear"></i>
                         </div>
-                        <p class="text-xs text-slate-200 font-bold">اضغط لرفع شيت Excel أو اسحبه هنا</p>
-                        <p class="text-[10px] text-slate-500 mt-0.5">يستخرج الاسم، الجنس، الجواز، التأشيرة، والإيميل</p>
+                        <div>
+                            <h2 class="text-sm font-black text-white">تغذية طابور المعتمرين</h2>
+                            <p class="text-[10px] text-slate-400">شيت إكسل كامل أو إضافة فردية</p>
+                        </div>
                     </div>
-                    <input id="excelFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)" />
-                </label>
+                </div>
 
-                <div class="space-y-2.5 border-t border-slate-800/80 pt-3">
-                    <p class="text-xs text-slate-400 font-bold">إضافة فردية سريعة:</p>
-                    <input id="manualName" type="text" placeholder="اسم المعتمر رباعي (اختياري)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:border-amber-400 focus:outline-none">
-                    <div class="grid grid-cols-2 gap-2">
-                        <input id="manualPassport" type="text" placeholder="رقم الجواز" dir="ltr" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-left font-mono focus:border-amber-400 focus:outline-none">
-                        <input id="manualVisa" type="text" placeholder="رقم التأشيرة" dir="ltr" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-left font-mono focus:border-amber-400 focus:outline-none">
+                <!-- أزرار التبديل داخل الكارت الجانبي لمنع الزحمة -->
+                <div class="grid grid-cols-2 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 mb-3.5 text-xs font-bold">
+                    <button id="sideTabExcel" onclick="switchSideInputMode('excel')" class="py-1.5 rounded-lg bg-sky-500 text-slate-950 font-extrabold transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> رفع شيت Excel
+                    </button>
+                    <button id="sideTabManual" onclick="switchSideInputMode('manual')" class="py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-user-plus"></i> إضافة يدوية
+                    </button>
+                </div>
+
+                <!-- قسم رفع الإكسل -->
+                <div id="sideExcelPanel">
+                    <label class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-sky-500/40 hover:border-amber-400 rounded-2xl cursor-pointer bg-gradient-to-b from-slate-900/50 to-slate-950/90 hover:from-slate-900 transition group p-4 text-center">
+                        <div class="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 group-hover:text-amber-400 group-hover:scale-110 transition mb-2 shadow-inner">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                        </div>
+                        <p class="text-xs text-white font-extrabold">اضغط لاختيار ملف الإكسل</p>
+                        <p class="text-[10px] text-slate-400 mt-1">يتعرف تلقائياً على الأسماء والجوازات والمجموعات السابقة</p>
+                        <input id="excelFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)" />
+                    </label>
+                </div>
+
+                <!-- قسم الإضافة اليدوية (يظهر عند الضغط على تبويب إضافة يدوية) -->
+                <div id="sideManualPanel" class="hidden space-y-2.5">
+                    <div class="sleek-input-wrap">
+                        <input id="manualName" type="text" placeholder="اسم المعتمر رباعي" class="sleek-input">
+                        <i class="fa-solid fa-user sleek-input-icon"></i>
                     </div>
-                    <input id="manualEmail" type="email" placeholder="إيميل المعتمر (اتركه فارغاً لإيميل المكتب)" dir="ltr" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-left font-mono focus:border-amber-400 focus:outline-none">
-                    <button onclick="addManualPilgrim()" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs transition border border-slate-700">
-                        <i class="fa-solid fa-user-plus ml-1"></i> إدراج في الطابور
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="sleek-input-wrap">
+                            <input id="manualPassport" type="text" placeholder="رقم الجواز" dir="ltr" class="sleek-input text-left font-mono">
+                            <i class="fa-solid fa-passport sleek-input-icon"></i>
+                        </div>
+                        <div class="sleek-input-wrap">
+                            <input id="manualVisa" type="text" placeholder="التأشيرة" dir="ltr" class="sleek-input text-left font-mono">
+                            <i class="fa-solid fa-stamp sleek-input-icon"></i>
+                        </div>
+                    </div>
+                    <div class="sleek-input-wrap">
+                        <input id="manualEmail" type="email" placeholder="إيميل الحساب (اختياري)" dir="ltr" class="sleek-input text-left font-mono">
+                        <i class="fa-solid fa-envelope sleek-input-icon"></i>
+                    </div>
+                    <button onclick="addManualPilgrim()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition flex items-center justify-center gap-1.5 shadow-lg">
+                        <i class="fa-solid fa-plus-circle"></i> إدراج المعتمر في الطابور
                     </button>
                 </div>
             </div>
 
-        </div>
+        </aside>
 
         <!-- العمود الأيسر: شجرة المجموعة الحية + الكروت والجدول (8 أعمدة) -->
-        <div class="lg:col-span-8 space-y-6">
+        <section class="lg:col-span-8 space-y-6">
 
             <!-- 🌟 1. خريطة الربط العنقودية الحية (Live Group Architecture) 🌟 -->
             <div class="royal-card-gold p-5 rounded-2xl relative overflow-hidden">
                 <div class="flex flex-wrap justify-between items-center gap-3 pb-4 mb-5 border-b border-slate-800/90">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg shadow">
-                            <i class="fa-solid fa-diagram-project"></i>
+                            <i class="fa-solid fa-sitemap"></i>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
@@ -401,10 +527,10 @@
                 <div class="flex justify-between items-center bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5">
                     <div class="text-xs text-amber-200 font-bold flex items-center gap-2">
                         <i class="fa-solid fa-circle-info text-amber-400 text-base"></i>
-                        <span>يتم تجميع كل أدمن رئيسي وتحته الـ 3 مرافقين المرتبطين به في بطاقة مستقلة جاهزة للطباعة أو الحفظ كـ PDF.</span>
+                        <span>كروت المجموعات جاهزة للطباعة بتصميم نظيف يعرض اسم الأدمن كعنوان وتحته أسماء المرافقين فقط.</span>
                     </div>
                     <button onclick="printGroupsToPDF()" class="px-4 py-2 rounded-xl gold-gradient-btn text-xs font-black flex items-center gap-2 shrink-0 shadow">
-                        <i class="fa-solid fa-print"></i> طباعة / حفظ PDF الآن
+                        <i class="fa-solid fa-print"></i> طباعة الكروت PDF الآن
                     </button>
                 </div>
 
@@ -413,7 +539,7 @@
                 </div>
             </div>
 
-        </div>
+        </section>
     </main>
 
     <!-- Toast إشعار النسخ -->
@@ -431,7 +557,27 @@
         let currentViewMode = "table";
         let lastServerState = {};
 
-        // دالة نسخ سريعة عند الضغط على أي كود
+        // تبديل التبويب في القائمة الجانبية (بين رفع إكسل وإضافة يدوية)
+        function switchSideInputMode(mode) {
+            const excelPanel = document.getElementById("sideExcelPanel");
+            const manualPanel = document.getElementById("sideManualPanel");
+            const btnExcel = document.getElementById("sideTabExcel");
+            const btnManual = document.getElementById("sideTabManual");
+
+            if (mode === "excel") {
+                excelPanel.classList.remove("hidden");
+                manualPanel.classList.add("hidden");
+                btnExcel.className = "py-1.5 rounded-lg bg-sky-500 text-slate-950 font-extrabold transition flex items-center justify-center gap-1.5";
+                btnManual.className = "py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5";
+            } else {
+                excelPanel.classList.add("hidden");
+                manualPanel.classList.remove("hidden");
+                btnManual.className = "py-1.5 rounded-lg bg-sky-500 text-slate-950 font-extrabold transition flex items-center justify-center gap-1.5";
+                btnExcel.className = "py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5";
+            }
+        }
+
+        // نسخ سريع عند الضغط على أي كود
         function copyText(txt, label = "النص") {
             if (!txt || txt === "-") return;
             navigator.clipboard.writeText(txt);
@@ -659,7 +805,7 @@
         function renderSavedProfiles() {
             const select = document.getElementById("savedProfilesSelect");
             const profiles = getSavedProfiles();
-            select.innerHTML = `<option value="">-- اختر حساباً محفوظاً (${profiles.length}) --</option>`;
+            select.innerHTML = `<option value="">-- اختر مكتب / إيميل محفوظ (${profiles.length}) --</option>`;
             profiles.forEach((p, idx) => {
                 const opt = document.createElement("option");
                 opt.value = idx;
@@ -669,7 +815,7 @@
         }
 
         function saveCurrentProfile() {
-            const name = document.getElementById("profileName").value.trim() || "حساب بدون اسم";
+            const name = document.getElementById("profileName").value.trim() || "مكتب بدون اسم";
             const email = document.getElementById("clientEmail").value.trim();
             const pass = document.getElementById("clientPass").value.trim();
             if (!email || !pass) {
@@ -684,7 +830,7 @@
             localStorage.setItem("nusuk_saved_profiles", JSON.stringify(profiles));
             saveActiveCredentials();
             renderSavedProfiles();
-            alert("تم حفظ الحساب بنجاح!");
+            alert("تم حفظ بيانات المكتب بنجاح!");
         }
 
         function loadSelectedProfile() {
@@ -879,39 +1025,18 @@
 
                             <!-- كارت الأدمن الرئيسي -->
                             <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 mb-3.5">
-                                <div class="flex justify-between items-start gap-2">
-                                    <div>
-                                        <span class="text-[10px] text-amber-300 font-extrabold uppercase tracking-wider block">👑 الأدمن الرئيسي (القائد):</span>
-                                        <span class="text-sm font-black text-white">${g.leader.cleanName}</span>
-                                    </div>
-                                    <span onclick="copyText('${g.leader.passport}', 'رقم الجواز')" class="font-mono text-xs font-bold text-amber-300 bg-slate-950/90 px-2.5 py-1 rounded-lg border border-amber-500/30 cursor-pointer hover:bg-amber-500 hover:text-slate-950 transition" dir="ltr">
-                                        ${g.leader.passport || "-"}
-                                    </span>
-                                </div>
-                                <div class="flex flex-wrap justify-between items-center mt-2 pt-2 border-t border-amber-500/20 text-[11px]">
-                                    <span onclick="copyText('${g.leader.nusukId}', 'Nusuk ID')" class="font-mono font-bold text-emerald-400 cursor-pointer hover:underline" dir="ltr">
-                                        Nusuk ID: ${g.leader.nusukId || "-"}
-                                    </span>
-                                    <span class="font-mono text-slate-400" dir="ltr">Visa: ${g.leader.visa || "-"}</span>
-                                </div>
+                                <span class="text-[10px] text-amber-300 font-extrabold block mb-0.5">👑 الأدمن الرئيسي (القائد):</span>
+                                <span class="text-base font-black text-white">${g.leader.cleanName}</span>
                             </div>
 
                             <!-- قائمة المرافقين تحت الأدمن -->
                             <div class="space-y-2 pr-3 border-r-2 border-emerald-500/50 mr-1.5">
                                 ${g.companions.length > 0 ? g.companions.map((c, ci) => `
-                                    <div class="p-2.5 rounded-xl bg-slate-950/85 border border-slate-800/90 flex justify-between items-center gap-2 hover:border-slate-700 transition">
-                                        <div class="min-w-0">
-                                            <div class="text-xs font-extrabold text-white truncate">
-                                                <span class="text-emerald-400 ml-1">↳ مرافق ${ci + 1}:</span> ${c.cleanName}
-                                            </div>
-                                            <div class="flex items-center gap-3 mt-1 text-[11px] font-mono">
-                                                <span onclick="copyText('${c.nusukId}', 'Nusuk ID')" class="text-amber-300 cursor-pointer hover:underline" dir="ltr">ID: ${c.nusukId || "-"}</span>
-                                                <span class="text-slate-500" dir="ltr">Visa: ${c.visa || "-"}</span>
-                                            </div>
-                                        </div>
-                                        <span onclick="copyText('${c.passport}', 'رقم الجواز')" class="font-mono text-xs text-slate-200 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 cursor-pointer hover:border-amber-400 shrink-0" dir="ltr">
-                                            ${c.passport}
+                                    <div class="p-2.5 rounded-xl bg-slate-950/85 border border-slate-800/90 flex items-center gap-2.5 hover:border-slate-700 transition">
+                                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center justify-center shrink-0">
+                                            ${ci + 1}
                                         </span>
+                                        <span class="text-xs font-extrabold text-white truncate">${c.cleanName}</span>
                                     </div>
                                 `).join("") : `<div class="text-xs text-slate-500 py-2">لا يوجد مرافقون مرتبطون بهذا الأدمن بعد.</div>`}
                             </div>
@@ -921,64 +1046,43 @@
             }).join("");
         }
 
-        // 🌟 محرك طباعة وتصدير كروت المجموعات كملف PDF احترافي (A4 Print Engine) 🌟
+        // 🌟 محرك طباعة كروت المجموعات المبسط والأنيق (اسم الأدمن كعنوان وتحته أسماء المرافقين فقط) 🌟
         function printGroupsToPDF() {
             const groups = buildGroupsFromList();
             if (groups.length === 0) {
-                alert("لا توجد مجموعات مسجلة لطباعتها! تأكد من وجود حسابات مسجلة كرئيسي ومرافقين أولاً.");
+                alert("لا توجد مجموعات مسجلة لطباعتها!");
                 return;
             }
 
-            const officeName = document.getElementById("profileName").value.trim() || "تقرير مجموعات نسك المعتمدة";
+            const officeName = document.getElementById("profileName").value.trim() || "كشف مجموعات نسك";
             const todayDate = new Date().toLocaleDateString("ar-EG", { year: 'numeric', month: 'long', day: 'numeric' });
 
             const printWindow = window.open("", "_blank");
             const cardsHtml = groups.map(g => `
                 <div class="group-card">
-                    <div class="card-header">
-                        <div class="group-title">👑 مجموعة رقم #${g.groupNumber}</div>
-                        <div class="group-count">إجمالي الأفراد: ${1 + g.companions.length} (أدمن + ${g.companions.length} مرافقين)</div>
-                    </div>
-
-                    <!-- صندوق الأدمن الرئيسي -->
-                    <div class="leader-box">
-                        <div class="leader-badge">الأدمن الرئيسي (القائد)</div>
-                        <div class="leader-grid">
-                            <div><strong>الاسم:</strong> ${g.leader.cleanName}</div>
-                            <div><strong>رقم الجواز:</strong> <span class="mono">${g.leader.passport || "-"}</span></div>
-                            <div><strong>رقم التأشيرة:</strong> <span class="mono">${g.leader.visa || "-"}</span></div>
-                            <div><strong>Nusuk ID:</strong> <span class="mono id-highlight">${g.leader.nusukId || "-"}</span></div>
+                    <!-- هيدر الكارت: رقم المجموعة واسم الأدمن -->
+                    <div class="card-leader-header">
+                        <div class="badge-row">
+                            <span class="group-num">مجموعة #${g.groupNumber}</span>
+                            <span class="members-badge">${1 + g.companions.length} أفراد</span>
                         </div>
-                        ${g.leader.email ? `<div class="email-row"><strong>الإيميل:</strong> <span class="mono">${g.leader.email}</span></div>` : ""}
+                        <div class="leader-label">👑 الأدمن الرئيسي (القائد)</div>
+                        <div class="leader-name">${g.leader.cleanName}</div>
                     </div>
 
-                    <!-- جدول المرافقين المرتبطين -->
-                    <div class="companions-section">
-                        <div class="comp-title">المرافقون المرتبطون بالمجموعة (${g.companions.length} / 3):</div>
+                    <!-- قائمة أسماء المرافقين فقط -->
+                    <div class="companions-body">
+                        <div class="comp-section-title">المرافقون بالمجموعة:</div>
                         ${g.companions.length > 0 ? `
-                            <table class="comp-table">
-                                <thead>
-                                    <tr>
-                                        <th>م</th>
-                                        <th>اسم المرافق</th>
-                                        <th>رقم الجواز</th>
-                                        <th>رقم التأشيرة</th>
-                                        <th>Nusuk ID</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${g.companions.map((c, idx) => `
-                                        <tr>
-                                            <td>مرافق ${idx + 1}</td>
-                                            <td><strong>${c.cleanName}</strong></td>
-                                            <td class="mono">${c.passport || "-"}</td>
-                                            <td class="mono">${c.visa || "-"}</td>
-                                            <td class="mono id-highlight">${c.nusukId || "-"}</td>
-                                        </tr>
-                                    `).join("")}
-                                </tbody>
-                            </table>
-                        ` : `<div class="no-comp">لا يوجد مرافقون مسجلون في هذه المجموعة.</div>`}
+                            <div class="comp-list">
+                                ${g.companions.map((c, idx) => `
+                                    <div class="comp-pill">
+                                        <span class="comp-index">${idx + 1}</span>
+                                        <span class="comp-name">${c.cleanName}</span>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        ` : `<div class="no-comp">لا يوجد مرافقون مع هذا الحساب</div>`}
                     </div>
                 </div>
             `).join("");
@@ -988,128 +1092,163 @@
                 <html lang="ar" dir="rtl">
                 <head>
                     <meta charset="UTF-8">
-                    <title>كروت مجموعات نسك - ${officeName}</title>
-                    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+                    <title>كروت المجموعات - ${officeName}</title>
+                    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&display=swap" rel="stylesheet">
                     <style>
                         * { box-sizing: border-box; margin: 0; padding: 0; }
                         body {
                             font-family: 'Cairo', sans-serif;
                             background: #f8fafc;
                             color: #0f172a;
-                            padding: 20px;
+                            padding: 24px;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
                         }
-                        .report-header {
+                        .top-bar {
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
-                            border-bottom: 3px solid #b45309;
-                            padding-bottom: 12px;
-                            margin-bottom: 20px;
+                            border-bottom: 3px solid #d97706;
+                            padding-bottom: 14px;
+                            margin-bottom: 24px;
                         }
-                        .report-header h1 { font-size: 20px; font-weight: 800; color: #0f172a; }
-                        .report-header p { font-size: 12px; color: #475569; font-weight: 600; }
+                        .top-bar h1 { font-size: 22px; font-weight: 900; color: #0f172a; }
+                        .top-bar p { font-size: 13px; color: #64748b; font-weight: 700; }
+                        
                         .cards-grid {
                             display: grid;
-                            grid-template-columns: repeat(2, 1fr);
+                            grid-template-columns: repeat(3, 1fr);
                             gap: 16px;
                         }
                         .group-card {
                             background: #ffffff;
-                            border: 2px solid #cbd5e1;
-                            border-radius: 12px;
+                            border: 2px solid #e2e8f0;
+                            border-radius: 16px;
                             overflow: hidden;
                             page-break-inside: avoid;
                             break-inside: avoid;
-                            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+                            display: flex;
+                            flex-direction: column;
                         }
-                        .card-header {
-                            background: #0f172a;
+                        .card-leader-header {
+                            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
                             color: #ffffff;
-                            padding: 8px 14px;
+                            padding: 14px 16px;
+                            border-bottom: 3px solid #f59e0b;
+                        }
+                        .badge-row {
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
+                            margin-bottom: 8px;
                         }
-                        .group-title { font-size: 14px; font-weight: 800; color: #fbbf24; }
-                        .group-count { font-size: 11px; color: #e2e8f0; font-weight: 600; }
-                        .leader-box {
-                            background: #fffbeb;
-                            border-bottom: 2px solid #fde68a;
-                            padding: 10px 14px;
-                        }
-                        .leader-badge {
-                            display: inline-block;
-                            background: #d97706;
-                            color: #fff;
-                            font-size: 10px;
-                            font-weight: 800;
-                            padding: 2px 8px;
-                            border-radius: 6px;
-                            margin-bottom: 6px;
-                        }
-                        .leader-grid {
-                            display: grid;
-                            grid-template-columns: 1fr 1fr;
-                            gap: 6px;
-                            font-size: 12px;
-                        }
-                        .email-row {
-                            margin-top: 5px;
-                            padding-top: 4px;
-                            border-top: 1px dashed #fcd34d;
-                            font-size: 11px;
-                            color: #475569;
-                        }
-                        .companions-section { padding: 10px 14px; }
-                        .comp-title { font-size: 11px; font-weight: 800; color: #334155; margin-bottom: 6px; }
-                        .comp-table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            font-size: 11px;
-                        }
-                        .comp-table th {
-                            background: #f1f5f9;
-                            color: #334155;
-                            padding: 5px 6px;
-                            border: 1px solid #cbd5e1;
-                            text-align: right;
-                            font-weight: 800;
-                        }
-                        .comp-table td {
-                            padding: 5px 6px;
-                            border: 1px solid #cbd5e1;
+                        .group-num {
+                            background: #f59e0b;
                             color: #0f172a;
+                            font-size: 11px;
+                            font-weight: 900;
+                            padding: 2px 10px;
+                            border-radius: 20px;
                         }
-                        .mono { font-family: Consolas, monospace; font-weight: 700; direction: ltr; display: inline-block; }
-                        .id-highlight { color: #047857; font-weight: 800; }
-                        .no-comp { font-size: 11px; color: #64748b; padding: 6px 0; }
+                        .members-badge {
+                            font-size: 11px;
+                            color: #cbd5e1;
+                            font-weight: 700;
+                        }
+                        .leader-label {
+                            font-size: 11px;
+                            color: #fbbf24;
+                            font-weight: 700;
+                            margin-bottom: 2px;
+                        }
+                        .leader-name {
+                            font-size: 15px;
+                            font-weight: 900;
+                            color: #ffffff;
+                            line-height: 1.4;
+                        }
+                        .companions-body {
+                            padding: 14px 16px;
+                            background: #ffffff;
+                            flex: 1;
+                        }
+                        .comp-section-title {
+                            font-size: 11px;
+                            font-weight: 800;
+                            color: #64748b;
+                            margin-bottom: 10px;
+                        }
+                        .comp-list {
+                            display: flex;
+                            flex-direction: column;
+                            gap: 8px;
+                        }
+                        .comp-pill {
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            background: #f8fafc;
+                            border: 1px solid #e2e8f0;
+                            border-right: 4px solid #10b981;
+                            padding: 8px 12px;
+                            border-radius: 10px;
+                        }
+                        .comp-index {
+                            width: 22px;
+                            height: 22px;
+                            background: #10b981;
+                            color: #ffffff;
+                            font-size: 12px;
+                            font-weight: 900;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            flex-shrink: 0;
+                        }
+                        .comp-name {
+                            font-size: 13.5px;
+                            font-weight: 800;
+                            color: #1e293b;
+                        }
+                        .no-comp {
+                            font-size: 12px;
+                            color: #94a3b8;
+                            text-align: center;
+                            padding: 12px 0;
+                            font-weight: 700;
+                        }
                         @media print {
-                            body { background: #fff; padding: 0; }
+                            body { background: #ffffff; padding: 0; }
                             .no-print { display: none !important; }
                             @page { size: A4; margin: 10mm; }
                         }
                     </style>
                 </head>
                 <body>
-                    <div class="no-print" style="margin-bottom: 16px; text-align: center;">
-                        <button onclick="window.print()" style="background:#d97706; color:#fff; border:none; padding:10px 25px; border-radius:8px; font-family:'Cairo'; font-weight:800; cursor:pointer; font-size:14px;">
-                            🖨️ اضغط هنا للطباعة أو الحفظ كـ PDF
+                    <div class="no-print" style="margin-bottom: 20px; text-align: center;">
+                        <button onclick="window.print()" style="background: linear-gradient(135deg, #f59e0b, #d97706); color:#0f172a; border:none; padding:10px 28px; border-radius:12px; font-family:'Cairo'; font-weight:900; cursor:pointer; font-size:15px; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                            🖨️ طباعة / حفظ الكروت كـ PDF
                         </button>
                     </div>
-                    <div class="report-header">
+
+                    <div class="top-bar">
                         <div>
-                            <h1>بطاقات توزيع مجموعات نسك (الأدمن والمرافقين)</h1>
-                            <p>${officeName} | إجمالي المجموعات: ${groups.length} مجموعة</p>
+                            <h1>كروت توزيع مجموعات نسك</h1>
+                            <p>${officeName} — إجمالي المجموعات: (${groups.length}) مجموعة</p>
                         </div>
                         <div style="text-align: left;">
-                            <p>تاريخ الإصدار: ${todayDate}</p>
+                            <p>${todayDate}</p>
                         </div>
                     </div>
+
                     <div class="cards-grid">
                         ${cardsHtml}
                     </div>
+
                     <script>
-                        window.onload = function() { setTimeout(() => window.print(), 500); };
+                        window.onload = function() { setTimeout(() => window.print(), 400); };
                     <\/script>
                 </body>
                 </html>
