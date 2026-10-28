@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة نسك الملكية للأتمتة والجدولة | Nusuk Royal Pro V6</title>
+    <title>منصة نسك الملكية للأتمتة والجدولة | Nusuk Royal Pro V6.1</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS لقراءة وتصدير ملفات الإكسل -->
@@ -148,27 +148,33 @@
                         Nusuk Royal Studio
                     </h1>
                     <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-extrabold">
-                        V6.0 Scheduler
+                        V6.1 Pro
                     </span>
                 </div>
-                <p class="text-xs text-slate-400 mt-0.5">نظام الربط العائلي وجدولة الأفواج المتتالية (ينهي الفوج ويدخل على التالي تلقائياً)</p>
+                <p class="text-xs text-slate-400 mt-0.5">نظام الربط العائلي وجدولة الأفواج والتحكم المباشر في بصمة كل محاكي</p>
             </div>
         </div>
 
-        <!-- المؤشرات العلوية وأزرار التصدير والطباعة والصحة -->
+        <!-- المؤشرات العلوية وأزرار تغيير البصمة اليدوي لكل محاكي -->
         <div class="flex items-center gap-2 flex-wrap">
-            <!-- بصمة محاكي 1 -->
-            <div class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-amber-500/30 text-xs font-bold">
+            <!-- بصمة محاكي 1 + زر تغيير الـ ID يدوياً -->
+            <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-amber-500/30 text-xs font-bold">
                 <i class="fa-solid fa-crown text-amber-400"></i>
                 <span class="text-slate-300">محاكي 1:</span>
                 <span id="emu1CounterText" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-black">0/5</span>
+                <button id="btnRandEmu1" onclick="manualRandomizeEmulator('emu1')" title="تغيير بصمة و ID المحاكي الأول وعمل ريستارت الآن" class="mr-1 px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 transition flex items-center gap-1 text-[11px] font-extrabold">
+                    <i class="fa-solid fa-fingerprint"></i> تغيير ID
+                </button>
             </div>
 
-            <!-- بصمة محاكي 2 -->
-            <div class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-purple-500/30 text-xs font-bold">
+            <!-- بصمة محاكي 2 + زر تغيير الـ ID يدوياً -->
+            <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-purple-500/30 text-xs font-bold">
                 <i class="fa-solid fa-users text-purple-400"></i>
                 <span class="text-slate-300">محاكي 2:</span>
                 <span id="emu2CounterText" class="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-black">0/5</span>
+                <button id="btnRandEmu2" onclick="manualRandomizeEmulator('emu2')" title="تغيير بصمة و ID المحاكي الثاني وعمل ريستارت الآن" class="mr-1 px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-slate-950 border border-purple-500/40 transition flex items-center gap-1 text-[11px] font-extrabold">
+                    <i class="fa-solid fa-fingerprint"></i> تغيير ID
+                </button>
             </div>
 
             <!-- حالة السيرفر -->
@@ -179,7 +185,7 @@
 
             <!-- فحص صحة المحاكيات وتصفير الحالة -->
             <button onclick="checkEmulatorsHealth()" title="فحص اتصال وصحة المحاكيين" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5">
-                <i class="fa-solid fa-heart-pulse"></i> فحص المحاكيات
+                <i class="fa-solid fa-heart-pulse"></i> فحص
             </button>
             <button onclick="resetServerState()" title="تصفير حالة الطوارئ في السيرفر" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-amber-600/20 text-amber-300 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5">
                 <i class="fa-solid fa-screwdriver-wrench"></i> تصفير الحالة
@@ -187,7 +193,7 @@
 
             <!-- زر طباعة كروت المجموعات PDF -->
             <button onclick="printGroupsToPDF()" class="px-3.5 py-2 rounded-xl gold-gradient-btn text-xs font-black transition flex items-center gap-1.5 shadow-lg">
-                <i class="fa-solid fa-print"></i> طباعة الكروت PDF
+                <i class="fa-solid fa-print"></i> طباعة PDF
             </button>
 
             <!-- زر تصدير الإكسل -->
@@ -203,7 +209,7 @@
         <!-- 🎨 العمود الأيمن: الكابينة الجانبية الذكية + جدول الأفواج المتتالية 🎨 -->
         <aside class="lg:col-span-4 space-y-5">
 
-            <!-- 🌟 الكارت الجديد: مدير جدولة الأفواج والمجموعات المتتالية (Batch Queue Scheduler) 🌟 -->
+            <!-- 🌟 مدير جدولة الأفواج والمجموعات المتتالية (Batch Queue Scheduler) 🌟 -->
             <div class="sidebar-dock-card rounded-2xl p-5" style="border-right-color: #a855f7;">
                 <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
                     <div class="flex items-center gap-2.5">
@@ -368,7 +374,7 @@
                     </button>
                 </div>
 
-                <!-- قسم رفع الإكسل (يدعم رفع عدة ملفات أو إضافتها كأفواج جديدة) -->
+                <!-- قسم رفع الإكسل -->
                 <div id="sideExcelPanel" class="space-y-2.5">
                     <div class="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-xl border border-slate-800 text-[11px]">
                         <span class="text-slate-300 font-bold">طريقة إدارج الشيت:</span>
@@ -535,8 +541,8 @@
                         </button>
                     </div>
 
-                    <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold transition" title="إعادة محاولة الأخطاء في هذا الفوج">
-                        <i class="fa-solid fa-rotate-right"></i>
+                    <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold transition flex items-center gap-1.5" title="تصفير كل الأخطاء في هذا الفوج دفعة واحدة">
+                        <i class="fa-solid fa-rotate-right text-amber-400"></i> تصفير كل الأخطاء
                     </button>
                     <button onclick="clearPilgrimList()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-red-950/60 text-red-400 border border-slate-800 text-xs font-bold transition" title="مسح قائمة الفوج الحالي">
                         <i class="fa-solid fa-trash-can"></i>
@@ -556,7 +562,7 @@
                                 <th class="py-3.5 px-3">الدور والمجموعة العائلية</th>
                                 <th class="py-3.5 px-3">Nusuk ID</th>
                                 <th class="py-3.5 px-3">الحالة</th>
-                                <th class="py-3.5 px-3 text-center">تحديد الدور / إجراء</th>
+                                <th class="py-3.5 px-3 text-center">إجراءات الفرد (تصفير / تشغيل)</th>
                             </tr>
                         </thead>
                         <tbody id="pilgrimsTableBody" class="divide-y divide-slate-800/70">
@@ -596,17 +602,15 @@
     <script>
         const API_BASE = "http://127.0.0.1:8000";
 
-        // نظام الأفواج والجدولة المتتالية (Batches Queue System)
         let batchesQueue = [];
         let activeBatchIndex = 0;
-        let pilgrimsList = []; // يشير دائماً إلى قائمة الفوج المفتوح حالياً
+        let pilgrimsList = [];
 
         let isProcessing = false;
         let stopRequested = false;
         let currentViewMode = "table";
         let lastServerState = {};
 
-        // تنبيه صوتي بسيط (Web Audio API)
         function playTone(freq = 660, duration = 0.15) {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -631,8 +635,52 @@
             setTimeout(() => toast.classList.add("hidden"), 2800);
         }
 
+        // 🌟 وظيفة الزرار الجديد: تغيير الـ ID والبصمة لمحاكي محدد يدوياً 🌟
+        async function manualRandomizeEmulator(emuKey) {
+            const label = emuKey === "emu1" ? "المحاكي الأول (الرئيسي)" : "المحاكي الثاني (المرافق)";
+            if (!confirm(`هل تريد تغيير بصمة الـ ID وإعادة تشغيل ${label} الآن؟\n(سيستغرق حوالي 30 ثانية حتى يعود للعمل ويفتح تطبيق نسك)`)) return;
+
+            const btnId = emuKey === "emu1" ? "btnRandEmu1" : "btnRandEmu2";
+            const btn = document.getElementById(btnId);
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري...`;
+            showToast(`جاري تغيير الـ ID وإعادة تشغيل ${label}...`);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/randomize-emulator?emu_key=${emuKey}`, { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || `تم تغيير بصمة ${label} بنجاح!`);
+                    playTone(780, 0.2);
+                } else {
+                    showToast(data.message || data.error || "فشل تغيير البصمة", true);
+                }
+            } catch (e) {
+                showToast("تعذر الاتصال بالسيرفر لتغيير البصمة", true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                checkServerStatus();
+            }
+        }
+
+        // 🌟 وظيفة الزرار الجديد: تصفير حالة الفشل لفرد واحد فقط 🌟
+        function clearSinglePilgrimStatus(idx) {
+            const p = pilgrimsList[idx];
+            if (!p) return;
+            p.status = "pending";
+            p.message = "في الانتظار";
+            p.roleType = "";
+            p.roleInfo = "-";
+            p.nusukId = "-";
+            saveBatchesToStorage();
+            renderPilgrimsTable();
+            showToast(`تم تصفير حالة الفرد رقم #${idx + 1} وإعادته لقائمة الانتظار`);
+        }
+
         // ==========================================
-        // إدارة الأفواج والجدولة المتتالية (Batches Management)
+        // إدارة الأفواج والجدولة المتتالية
         // ==========================================
         function initBatchesFromStorage() {
             try {
@@ -640,7 +688,6 @@
                 if (Array.isArray(savedBatches) && savedBatches.length > 0) {
                     batchesQueue = savedBatches;
                 } else {
-                    // استيراد القائمة القديمة لو موجودة
                     const oldList = JSON.parse(localStorage.getItem("nusuk_pilgrims_queue") || "[]");
                     batchesQueue = [{
                         id: Date.now(),
@@ -776,7 +823,6 @@
             }).join("");
         }
 
-        // تبديل التبويب في القائمة الجانبية
         function switchSideInputMode(mode) {
             const excelPanel = document.getElementById("sideExcelPanel");
             const manualPanel = document.getElementById("sideManualPanel");
@@ -823,7 +869,6 @@
             }
         }
 
-        // تحديث شجرة الربط الحية
         function updateLiveGroupTree(data) {
             const adminCard = document.getElementById("adminNodeCard");
             const adminAvatar = document.getElementById("adminAvatarBox");
@@ -910,7 +955,6 @@
             slotsGrid.innerHTML = slotsHtml;
         }
 
-        // فحص حالة السيرفر
         async function checkServerStatus() {
             const dot = document.getElementById("statusDot");
             const txt = document.getElementById("statusText");
@@ -948,7 +992,6 @@
             badge.className = "flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold";
         }
 
-        // فحص صحة المحاكيات (/api/health)
         async function checkEmulatorsHealth() {
             try {
                 const res = await fetch(`${API_BASE}/api/health`);
@@ -971,10 +1014,9 @@
             }
         }
 
-        // تصفير حالة السيرفر (/api/reset-state)
         async function resetServerState() {
             if (!confirm("هل تريد تصفير حالة المجموعة وفك أي تعليق في السيرفر؟")) return;
-            const resetCounters = confirm("هل تريد أيضاً تصفير عدادات البصمة (0/5) للمحاكيين؟\n(اضغط موافق لتصفيرها، أو إلغاء للإبقاء على العدادات كما هي)");
+            const resetCounters = confirm("هل تريد أيضاً تصفير عدادات البصمة (0/5) للمحاكيين؟");
             try {
                 const res = await fetch(`${API_BASE}/api/reset-state?reset_counters=${resetCounters}`, { method: "POST" });
                 const data = await res.json();
@@ -999,7 +1041,6 @@
             }
         }
 
-        // إعدادات الجنسية
         function setNatPreset(countryText, optionVal) {
             document.getElementById("natText").value = countryText;
             document.getElementById("natOption").value = String(optionVal);
@@ -1035,7 +1076,6 @@
             highlightActiveNatButton(savedText, savedOpt);
         }
 
-        // إدارة حسابات العملاء
         function togglePassVisibility() {
             const passInput = document.getElementById("clientPass");
             const icon = document.getElementById("passEyeIcon");
@@ -1113,7 +1153,6 @@
             renderSavedProfiles();
         }
 
-        // قراءة شيتات الإكسل (يدعم رفع عدة ملفات لجدولتها كأفواج متتالية)
         function extractFromRow(row, keys) {
             for (const k of Object.keys(row)) {
                 const cleanK = k.trim().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").toLowerCase();
@@ -1149,7 +1188,7 @@
                         passport: passport,
                         visa: visa,
                         email: email,
-                        forceRole: "", // اختياري: لتحديد قائد مجموعة جديدة يدوياً داخل نفس الشيت
+                        forceRole: "",
                         roleType: detectedRoleType,
                         roleInfo: roleCol || "-",
                         parentLeader: "",
@@ -1180,7 +1219,6 @@
 
                 if (newPilgrims.length === 0) continue;
 
-                // إذا كان الفوج الحالي فارغاً تماماً أو اختار الإضافة للفوج الحالي في أول ملف
                 if ((uploadMode === "append" && i === 0) || (pilgrimsList.length === 0 && batchesQueue.length === 1 && i === 0)) {
                     pilgrimsList.push(...newPilgrims);
                     if (batchesQueue[activeBatchIndex].name.startsWith("الفوج الرئيسي")) {
@@ -1190,7 +1228,6 @@
                     saveBatchesToStorage();
                     renderPilgrimsTable();
                 } else {
-                    // إنشاء فوج جديد مستقل في جدول الأفواج
                     createNewEmptyBatch(cleanFileName, newPilgrims);
                 }
             }
@@ -1230,7 +1267,6 @@
             renderPilgrimsTable();
         }
 
-        // تبديل دور معتمر يدوياً (مثلاً: ابدأ مجموعة جديدة من هذا المعتمر كأدمن)
         function togglePilgrimForcedRole(idx) {
             const p = pilgrimsList[idx];
             if (!p) return;
@@ -1336,7 +1372,6 @@
             }).join("");
         }
 
-        // طباعة الكروت PDF (اسم الأدمن كعنوان وتحته أسماء المرافقين فقط)
         function printGroupsToPDF() {
             const groups = buildGroupsFromList();
             if (groups.length === 0) {
@@ -1506,7 +1541,7 @@
             printWindow.document.close();
         }
 
-        // عرض الجدول الرئيسي
+        // عرض الجدول الرئيسي مع زر تصفير الفشل الفردي لكل معتمر
         function renderPilgrimsTable() {
             const tbody = document.getElementById("pilgrimsTableBody");
 
@@ -1578,6 +1613,11 @@
                     statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-bold"><i class="fa-solid fa-xmark ml-1"></i> ${shortErr}</span>`;
                 }
 
+                // إظهار زر التصفير الفردي بشكل بارز إذا كانت الحالة غير "pending"
+                const clearBtnClass = p.status === "error"
+                    ? "bg-orange-500 text-slate-950 hover:bg-orange-400 shadow font-bold"
+                    : "bg-slate-800 hover:bg-orange-500 text-orange-300 hover:text-slate-950";
+
                 return `
                     <tr class="${rowClass}">
                         <td class="py-3 px-3 font-bold text-slate-400">${idx + 1}</td>
@@ -1591,13 +1631,17 @@
                         <td class="py-3 px-3">${statusBadge}</td>
                         <td class="py-3 px-3 text-center">
                             <div class="flex items-center justify-center gap-1">
-                                <button onclick="togglePilgrimForcedRole(${idx})" title="تغيير الدور المجدول (تلقائي / بدء مجموعة جديدة كأدمن / مرافق)" class="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 transition text-xs">
+                                <button onclick="clearSinglePilgrimStatus(${idx})" title="تصفير حالة الفشل لهذا الفرد فقط وإعادته للانتظار" class="px-2 py-1.5 rounded-lg ${clearBtnClass} transition text-xs flex items-center gap-1">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                    ${p.status === "error" ? '<span class="text-[10px]">تصفير</span>' : ''}
+                                </button>
+                                <button onclick="togglePilgrimForcedRole(${idx})" title="تحديد الدور (تلقائي / بدء مجموعة جديدة كأدمن / مرافق)" class="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 transition text-xs">
                                     <i class="fa-solid fa-crown"></i>
                                 </button>
-                                <button onclick="processSinglePilgrim(${idx})" title="تشغيل هذا المعتمر" class="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white transition text-xs">
+                                <button onclick="processSinglePilgrim(${idx})" title="تشغيل هذا المعتمر الآن" class="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white transition text-xs">
                                     <i class="fa-solid fa-play"></i>
                                 </button>
-                                <button onclick="removePilgrim(${idx})" title="حذف" class="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition text-xs">
+                                <button onclick="removePilgrim(${idx})" title="حذف من القائمة" class="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition text-xs">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
@@ -1629,9 +1673,9 @@
             });
             saveBatchesToStorage();
             renderPilgrimsTable();
+            showToast("تم تصفير جميع الأخطاء في هذا الفوج");
         }
 
-        // تنفيذ معتمر واحد (مع دعم إغلاق المجموعة السابقة تلقائياً إذا كان مجدولاً كـ "أدمن مجموعة جديدة")
         async function processSinglePilgrim(idx) {
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
@@ -1642,7 +1686,6 @@
 
             const p = pilgrimsList[idx];
 
-            // إذا كان المعتمر مجدولاً كـ "أدمن رئيسي لمجموعة جديدة" وكان هناك أدمن سابق مفتوح، نغلق المجموعة السابقة تلقائياً أولاً!
             await checkServerStatus();
             if (p.forceRole === "leader" && lastServerState.leader_active) {
                 p.status = "processing";
@@ -1729,7 +1772,6 @@
             return true;
         }
 
-        // تشغيل الفوج الحالي فقط
         async function startQueueProcessing() {
             if (isProcessing) return;
             const clientEmail = document.getElementById("clientEmail").value.trim();
@@ -1758,7 +1800,6 @@
             document.getElementById("btnStopQueue").disabled = true;
         }
 
-        // 🌟 تشغيل كل الأفواج المجدولة بالتتابع (Auto-Batch Scheduler) 🌟
         async function startAllScheduledBatches() {
             if (isProcessing) return;
 
@@ -1776,11 +1817,9 @@
                 const hasPending = (batch.pilgrims || []).some(p => p.status === "pending");
                 if (!hasPending) continue;
 
-                // الانتقال للفوج وتحميل إعداداته (الإيميل + الجنسية + القائمة)
                 selectBatch(bIdx);
                 showToast(`بدء تشغيل الفوج المجدول: ${batch.name}`);
 
-                // التأكد من إغلاق أي مجموعة مفتوحة من الفوج السابق قبل بدء الفوج الجديد
                 await checkServerStatus();
                 if (lastServerState.leader_active && bIdx > 0) {
                     showToast("إغلاق مجموعة الفوج السابق قبل بدء الفوج الجديد...");
@@ -1794,7 +1833,6 @@
                     }
                 }
 
-                // بعد انتهاء الفوج بالكامل، إذا بقي أدمن مفتوح (مثلاً الفوج انتهى على مرافقين اثنين فقط)، نغلق مجموعته ليكون جاهزاً للفوج التالي
                 if (!stopRequested) {
                     await checkServerStatus();
                     if (lastServerState.leader_active) {
@@ -1820,7 +1858,6 @@
             showToast("تم طلب الإيقاف المؤقت.. سيتوقف بعد اكتمال المعتمر الحالي.", true);
         }
 
-        // تصدير الإكسل المنسق للفوج الحالي
         function exportResultsToExcel() {
             if (pilgrimsList.length === 0) {
                 alert("لا توجد بيانات لتصديرها في هذا الفوج!");
