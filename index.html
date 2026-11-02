@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة نسك الملكية للأتمتة والجدولة | Nusuk Royal Pro V6.1</title>
+    <title>منصة نسك الملكية للأتمتة والجدولة | Nusuk Royal Pro V6.2</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS لقراءة وتصدير ملفات الإكسل -->
@@ -148,10 +148,10 @@
                         Nusuk Royal Studio
                     </h1>
                     <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-extrabold">
-                        V6.1 Pro
+                        V6.2 Pro + استرجاع الروضة
                     </span>
                 </div>
-                <p class="text-xs text-slate-400 mt-0.5">نظام الربط العائلي وجدولة الأفواج والتحكم المباشر في بصمة كل محاكي</p>
+                <p class="text-xs text-slate-400 mt-0.5">نظام الربط العائلي، استرجاع الحسابات، فحص أحقية تصاريح الروضة وتوزيع المجموعات</p>
             </div>
         </div>
 
@@ -377,7 +377,7 @@
                 <!-- قسم رفع الإكسل -->
                 <div id="sideExcelPanel" class="space-y-2.5">
                     <div class="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-xl border border-slate-800 text-[11px]">
-                        <span class="text-slate-300 font-bold">طريقة إدارج الشيت:</span>
+                        <span class="text-slate-300 font-bold">طريقة إدراج الشيت:</span>
                         <select id="excelUploadMode" class="bg-slate-900 text-amber-300 font-bold border border-slate-700 rounded-lg px-2 py-1 text-[11px] focus:outline-none">
                             <option value="new_batch">إنشاء كفوج جديد في الجدولة</option>
                             <option value="append">إضافة للفوج المفتوح حالياً</option>
@@ -493,26 +493,30 @@
             </div>
 
             <!-- 2. شريط الإحصائيات السريعة للفوج الحالي -->
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-                <div class="royal-card p-3.5 rounded-2xl border-r-4 border-sky-500">
-                    <p class="text-[11px] text-slate-400 font-bold">إجمالي الفوج الحالي</p>
-                    <p id="statTotal" class="text-2xl font-black text-white mt-0.5">0</p>
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                <div class="royal-card p-3 rounded-2xl border-r-4 border-sky-500">
+                    <p class="text-[11px] text-slate-400 font-bold">إجمالي الفوج</p>
+                    <p id="statTotal" class="text-xl font-black text-white mt-0.5">0</p>
                 </div>
-                <div class="royal-card p-3.5 rounded-2xl border-r-4 border-amber-400">
+                <div class="royal-card p-3 rounded-2xl border-r-4 border-amber-400">
                     <p class="text-[11px] text-amber-300/80 font-bold">مجموعات الفوج</p>
-                    <p id="statGroupsCount" class="text-2xl font-black text-amber-400 mt-0.5">0</p>
+                    <p id="statGroupsCount" class="text-xl font-black text-amber-400 mt-0.5">0</p>
                 </div>
-                <div class="royal-card p-3.5 rounded-2xl border-r-4 border-emerald-500">
-                    <p class="text-[11px] text-slate-400 font-bold">تم التسجيل والربط</p>
-                    <p id="statSuccess" class="text-2xl font-black text-emerald-400 mt-0.5">0</p>
+                <div class="royal-card p-3 rounded-2xl border-r-4 border-emerald-500">
+                    <p class="text-[11px] text-slate-400 font-bold">تم بنجاح (ينفع)</p>
+                    <p id="statSuccess" class="text-xl font-black text-emerald-400 mt-0.5">0</p>
                 </div>
-                <div class="royal-card p-3.5 rounded-2xl border-r-4 border-orange-500">
+                <div class="royal-card p-3 rounded-2xl border-r-4 border-rose-500">
+                    <p class="text-[11px] text-rose-300/80 font-bold">غير مؤهل (مينفعش)</p>
+                    <p id="statIneligible" class="text-xl font-black text-rose-400 mt-0.5">0</p>
+                </div>
+                <div class="royal-card p-3 rounded-2xl border-r-4 border-orange-500">
                     <p class="text-[11px] text-slate-400 font-bold">مسجل مسبقاً</p>
-                    <p id="statAlready" class="text-2xl font-black text-orange-400 mt-0.5">0</p>
+                    <p id="statAlready" class="text-xl font-black text-orange-400 mt-0.5">0</p>
                 </div>
-                <div class="royal-card p-3.5 rounded-2xl border-r-4 border-red-500 col-span-2 sm:col-span-1">
+                <div class="royal-card p-3 rounded-2xl border-r-4 border-red-500">
                     <p class="text-[11px] text-slate-400 font-bold">أخطاء / فشل</p>
-                    <p id="statError" class="text-2xl font-black text-red-400 mt-0.5">0</p>
+                    <p id="statError" class="text-xl font-black text-red-400 mt-0.5">0</p>
                 </div>
             </div>
 
@@ -541,7 +545,7 @@
                         </button>
                     </div>
 
-                    <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold transition flex items-center gap-1.5" title="تصفير كل الأخطاء في هذا الفوج دفعة واحدة">
+                    <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold transition flex items-center gap-1.5" title="تصفير كل الأخطاء وغير المؤهلين دفعة واحدة">
                         <i class="fa-solid fa-rotate-right text-amber-400"></i> تصفير كل الأخطاء
                     </button>
                     <button onclick="clearPilgrimList()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-red-950/60 text-red-400 border border-slate-800 text-xs font-bold transition" title="مسح قائمة الفوج الحالي">
@@ -561,8 +565,8 @@
                                 <th class="py-3.5 px-3">رقم التأشيرة</th>
                                 <th class="py-3.5 px-3">الدور والمجموعة العائلية</th>
                                 <th class="py-3.5 px-3">Nusuk ID</th>
-                                <th class="py-3.5 px-3">الحالة</th>
-                                <th class="py-3.5 px-3 text-center">إجراءات الفرد (تصفير / تشغيل)</th>
+                                <th class="py-3.5 px-3">الحالة والسبب المفصل للروضة</th>
+                                <th class="py-3.5 px-3 text-center">إجراءات الفرد (استرجاع / تشغيل)</th>
                             </tr>
                         </thead>
                         <tbody id="pilgrimsTableBody" class="divide-y divide-slate-800/70">
@@ -632,10 +636,10 @@
             toast.className = `fixed bottom-5 left-5 ${isError ? 'bg-red-600' : 'bg-emerald-600'} text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 z-50`;
             document.getElementById("copyToastText").textContent = msg;
             toast.classList.remove("hidden");
-            setTimeout(() => toast.classList.add("hidden"), 2800);
+            setTimeout(() => toast.classList.add("hidden"), 3000);
         }
 
-        // 🌟 وظيفة الزرار الجديد: تغيير الـ ID والبصمة لمحاكي محدد يدوياً 🌟
+        // 🌟 وظيفة تغيير البصمة والـ ID لمحاكي محدد يدوياً 🌟
         async function manualRandomizeEmulator(emuKey) {
             const label = emuKey === "emu1" ? "المحاكي الأول (الرئيسي)" : "المحاكي الثاني (المرافق)";
             if (!confirm(`هل تريد تغيير بصمة الـ ID وإعادة تشغيل ${label} الآن؟\n(سيستغرق حوالي 30 ثانية حتى يعود للعمل ويفتح تطبيق نسك)`)) return;
@@ -665,7 +669,7 @@
             }
         }
 
-        // 🌟 وظيفة الزرار الجديد: تصفير حالة الفشل لفرد واحد فقط 🌟
+        // 🌟 وظيفة تصفير حالة الفرد وإعادته للانتظار 🌟
         function clearSinglePilgrimStatus(idx) {
             const p = pilgrimsList[idx];
             if (!p) return;
@@ -674,9 +678,112 @@
             p.roleType = "";
             p.roleInfo = "-";
             p.nusukId = "-";
+            p.reason = "";
+            p.eligible = null;
             saveBatchesToStorage();
             renderPilgrimsTable();
             showToast(`تم تصفير حالة الفرد رقم #${idx + 1} وإعادته لقائمة الانتظار`);
+        }
+
+        // 🌟 وظيفة استرجاع حساب وفحص تصاريح الروضة يدوياً لمعتمر محدد 🌟
+        async function recoverSinglePilgrimManual(idx) {
+            const clientEmail = document.getElementById("clientEmail").value.trim();
+            const clientPass = document.getElementById("clientPass").value.trim();
+            if (!clientEmail || !clientPass) {
+                alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات أولاً!");
+                return;
+            }
+
+            const p = pilgrimsList[idx];
+            if (!confirm(`هل تريد استرجاع حساب المعتمر (${p.name || p.passport}) وفحص تصاريح الروضة له الآن؟`)) return;
+
+            p.status = "processing";
+            p.message = "جاري استرجاع الحساب وفحص تصاريح الروضة...";
+            renderPilgrimsTable();
+
+            const natText = document.getElementById("natText").value.trim() || "مصر";
+            const natOpt = document.getElementById("natOption").value;
+            const natY = natOpt === "2" ? 275 : 195;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/recover`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        client_email: clientEmail,
+                        client_pass: clientPass,
+                        nationality: natText,
+                        nationality_y: natY,
+                        force_role: p.forceRole || null,
+                        pilgrim: {
+                            ...p.raw,
+                            "رقم الجواز": p.passport,
+                            "رقم التأشيرة": p.visa,
+                            "email": p.email || clientEmail
+                        }
+                    })
+                });
+
+                const data = await res.json();
+                handlePilgrimResult(p, data);
+            } catch (err) {
+                p.status = "error";
+                p.message = "تعذر الاتصال بالسيرفر أثناء الاسترجاع";
+            }
+
+            saveBatchesToStorage();
+            await checkServerStatus();
+            renderPilgrimsTable();
+        }
+
+        // معالجة نتيجة الرد من السيرفر (سواء من تسجيل أو استرجاع)
+        function handlePilgrimResult(p, data) {
+            p.eligible = data.eligible !== undefined ? data.eligible : null;
+            p.reason = data.reason || "";
+
+            if (data.status === "busy") {
+                p.status = "pending";
+                p.message = "السيرفر مشغول.. أعد المحاولة لاحقاً";
+                return;
+            }
+
+            if (data.status === "ineligible_permit" || data.eligible === false) {
+                p.status = "ineligible";
+                p.extractedName = data.pilgrim_name || p.name || "";
+                p.nusukId = data.nusuk_id || p.nusukId || "-";
+                p.roleInfo = "غير مؤهل للروضة";
+                p.message = data.reason || "غير مؤهل لحجز الروضة";
+                playTone(280, 0.25);
+                showToast(`المعتمر غير مؤهل: ${p.message}`, true);
+                return;
+            }
+
+            if (data.success) {
+                p.status = "completed";
+                playTone(740, 0.12);
+                if (data.role === "leader") {
+                    p.roleType = "leader";
+                    p.extractedName = data.leader_name || p.name || "";
+                    p.roleInfo = `أدمن رئيسي (${data.leader_name || "محاكي 1"})`;
+                    p.nusukId = data.leader_id || "-";
+                    p.message = data.reason ? `مؤهل وأصبح أدمن: ${data.reason}` : "تم التسجيل كرئيسي";
+                } else {
+                    p.roleType = "companion";
+                    p.extractedName = data.companion_name || p.name || "";
+                    p.parentLeader = lastServerState.leader_name || "";
+                    p.roleInfo = `مرافق (${data.companion_name || "محاكي 2"})`;
+                    p.nusukId = data.companion_id || "-";
+                    p.message = data.reason ? `مؤهل وتم الربط: ${data.reason}` : (data.message || "تم الربط بنجاح");
+                }
+            } else if (data.status === "already_registered") {
+                p.status = "already_registered";
+                p.roleInfo = "تم تخطيه";
+                p.message = "مسجل مسبقاً";
+            } else {
+                p.status = "error";
+                p.message = data.error || data.message || "خطأ أثناء التنفيذ";
+                playTone(280, 0.25);
+            }
         }
 
         // ==========================================
@@ -1193,8 +1300,10 @@
                         roleInfo: roleCol || "-",
                         parentLeader: "",
                         nusukId: nusukIdCol || "-",
-                        status: statusCol.includes("تم") ? "completed" : (statusCol.includes("مسبق") ? "already_registered" : "pending"),
-                        message: statusCol || "في الانتظار"
+                        status: statusCol.includes("تم") ? "completed" : (statusCol.includes("مسبق") ? "already_registered" : (statusCol.includes("غير مؤهل") ? "ineligible" : "pending")),
+                        message: statusCol || "في الانتظار",
+                        eligible: null,
+                        reason: ""
                     });
                 }
             });
@@ -1257,7 +1366,9 @@
                 parentLeader: "",
                 nusukId: "-",
                 status: "pending",
-                message: "في الانتظار"
+                message: "في الانتظار",
+                eligible: null,
+                reason: ""
             });
             document.getElementById("manualName").value = "";
             document.getElementById("manualPassport").value = "";
@@ -1541,12 +1652,13 @@
             printWindow.document.close();
         }
 
-        // عرض الجدول الرئيسي مع زر تصفير الفشل الفردي لكل معتمر
+        // عرض الجدول الرئيسي مع زر تصفير الفشل واسترجاع الحساب الفردي
         function renderPilgrimsTable() {
             const tbody = document.getElementById("pilgrimsTableBody");
 
             document.getElementById("statTotal").textContent = pilgrimsList.length;
             document.getElementById("statSuccess").textContent = pilgrimsList.filter(p => p.status === "completed").length;
+            document.getElementById("statIneligible").textContent = pilgrimsList.filter(p => p.status === "ineligible").length;
             document.getElementById("statAlready").textContent = pilgrimsList.filter(p => p.status === "already_registered").length;
             document.getElementById("statError").textContent = pilgrimsList.filter(p => p.status === "error").length;
 
@@ -1597,15 +1709,20 @@
                     roleBadgeHtml = `<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold">👑 مجدول كأدمن مجموعة جديدة</span>`;
                 } else if (p.forceRole === "companion") {
                     roleBadgeHtml = `<span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-bold">👥 مجدول كمرافق</span>`;
+                } else if (p.status === "ineligible") {
+                    rowClass = "bg-rose-950/15 hover:bg-rose-950/25 border-r-4 border-r-rose-500 transition";
+                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-bold">❌ غير مؤهل (مينفعش)</span>`;
                 } else if (p.status === "already_registered") {
-                    roleBadgeHtml = `<span class="text-orange-400/80 text-xs font-bold">تم تخطيه (مسجل مسبقاً)</span>`;
+                    roleBadgeHtml = `<span class="text-orange-400/80 text-xs font-bold">مسجل مسبقاً (في انتظار الاسترجاع)</span>`;
                 }
 
                 let statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-400 text-xs border border-slate-800">في الانتظار</span>`;
                 if (p.status === "processing") {
-                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> ${p.message || "جاري التسجيل..."}</span>`;
+                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> ${p.message || "جاري التنفيذ..."}</span>`;
                 } else if (p.status === "completed") {
-                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold"><i class="fa-solid fa-check-double ml-1"></i> ${p.message || "تم بنجاح"}</span>`;
+                    statusBadge = `<span title="${p.message || ''}" class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold"><i class="fa-solid fa-check-double ml-1"></i> ${p.message || "مؤهل وتم بنجاح ✓"}</span>`;
+                } else if (p.status === "ineligible") {
+                    statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold block max-w-xs truncate"><i class="fa-solid fa-ban ml-1"></i> ${p.message}</span>`;
                 } else if (p.status === "already_registered") {
                     statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation ml-1"></i> مسجل مسبقاً</span>`;
                 } else if (p.status === "error") {
@@ -1613,8 +1730,8 @@
                     statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-bold"><i class="fa-solid fa-xmark ml-1"></i> ${shortErr}</span>`;
                 }
 
-                // إظهار زر التصفير الفردي بشكل بارز إذا كانت الحالة غير "pending"
-                const clearBtnClass = p.status === "error"
+                // إظهار زر التصفير الفردي
+                const clearBtnClass = (p.status === "error" || p.status === "ineligible")
                     ? "bg-orange-500 text-slate-950 hover:bg-orange-400 shadow font-bold"
                     : "bg-slate-800 hover:bg-orange-500 text-orange-300 hover:text-slate-950";
 
@@ -1631,16 +1748,24 @@
                         <td class="py-3 px-3">${statusBadge}</td>
                         <td class="py-3 px-3 text-center">
                             <div class="flex items-center justify-center gap-1">
+                                <!-- زر الاسترجاع وفحص الروضة يدوياً -->
+                                <button onclick="recoverSinglePilgrimManual(${idx})" title="استرجاع الحساب وفحص تصاريح الروضة فوراً" class="p-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-slate-950 transition text-xs">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                </button>
+                                <!-- زر التصفير الفردي -->
                                 <button onclick="clearSinglePilgrimStatus(${idx})" title="تصفير حالة الفشل لهذا الفرد فقط وإعادته للانتظار" class="px-2 py-1.5 rounded-lg ${clearBtnClass} transition text-xs flex items-center gap-1">
                                     <i class="fa-solid fa-rotate-left"></i>
-                                    ${p.status === "error" ? '<span class="text-[10px]">تصفير</span>' : ''}
+                                    ${(p.status === "error" || p.status === "ineligible") ? '<span class="text-[10px]">تصفير</span>' : ''}
                                 </button>
+                                <!-- زر التبديل القسري للدور -->
                                 <button onclick="togglePilgrimForcedRole(${idx})" title="تحديد الدور (تلقائي / بدء مجموعة جديدة كأدمن / مرافق)" class="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 transition text-xs">
                                     <i class="fa-solid fa-crown"></i>
                                 </button>
+                                <!-- زر التشغيل الفردي المباشر -->
                                 <button onclick="processSinglePilgrim(${idx})" title="تشغيل هذا المعتمر الآن" class="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white transition text-xs">
                                     <i class="fa-solid fa-play"></i>
                                 </button>
+                                <!-- زر الحذف -->
                                 <button onclick="removePilgrim(${idx})" title="حذف من القائمة" class="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition text-xs">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
@@ -1666,14 +1791,16 @@
 
         function retryFailedPilgrims() {
             pilgrimsList.forEach(p => {
-                if (p.status === "error") {
+                if (p.status === "error" || p.status === "ineligible") {
                     p.status = "pending";
                     p.message = "في الانتظار";
+                    p.eligible = null;
+                    p.reason = "";
                 }
             });
             saveBatchesToStorage();
             renderPilgrimsTable();
-            showToast("تم تصفير جميع الأخطاء في هذا الفوج");
+            showToast("تم تصفير جميع الأخطاء وغير المؤهلين في هذا الفوج");
         }
 
         async function processSinglePilgrim(idx) {
@@ -1695,7 +1822,7 @@
             }
 
             p.status = "processing";
-            p.message = "جاري التسجيل والربط...";
+            p.message = "جاري الفحص والتسجيل...";
             renderPilgrimsTable();
 
             const natText = document.getElementById("natText").value.trim() || "مصر";
@@ -1727,39 +1854,7 @@
                 clearTimeout(timeoutId);
 
                 const data = await res.json();
-                if (data.status === "busy") {
-                    p.status = "pending";
-                    p.message = "السيرفر مشغول.. إعادة محاولة";
-                    await new Promise(r => setTimeout(r, 3000));
-                    return await processSinglePilgrim(idx);
-                }
-
-                if (data.success) {
-                    p.status = "completed";
-                    playTone(740, 0.12);
-                    if (data.role === "leader") {
-                        p.roleType = "leader";
-                        p.extractedName = data.leader_name || p.name || "";
-                        p.roleInfo = `رئيسي (${data.leader_name || "محاكي 1"})`;
-                        p.nusukId = data.leader_id || "-";
-                        p.message = "تم التسجيل كرئيسي";
-                    } else {
-                        p.roleType = "companion";
-                        p.extractedName = data.companion_name || p.name || "";
-                        p.parentLeader = lastServerState.leader_name || "";
-                        p.roleInfo = `مرافق (${data.companion_name || "محاكي 2"})`;
-                        p.nusukId = data.companion_id || "-";
-                        p.message = data.message || "تم الربط بنجاح";
-                    }
-                } else if (data.status === "already_registered") {
-                    p.status = "already_registered";
-                    p.roleInfo = "تم تخطيه";
-                    p.message = "مسجل مسبقاً";
-                } else {
-                    p.status = "error";
-                    p.message = data.error || data.message || "خطأ أثناء التنفيذ";
-                    playTone(280, 0.25);
-                }
+                handlePilgrimResult(p, data);
             } catch (err) {
                 clearTimeout(timeoutId);
                 p.status = "error";
@@ -1882,19 +1977,23 @@
                     currentLeaderName = displayName !== "معتمر" ? displayName : p.roleInfo;
                 }
 
+                let eligibilityText = "غير مفحوص";
+                if (p.eligible === true) eligibilityText = "مؤهل لحجز جديد (ينفع)";
+                else if (p.eligible === false || p.status === "ineligible") eligibilityText = "غير مؤهل (مينفعش)";
+
                 return {
                     "م": i + 1,
                     "الاسم": displayName,
                     "الجنس": p.raw ? (p.raw["الجنس"] || p.raw["النوع"] || "-") : "-",
                     "رقم الجواز": p.passport || "-",
                     "رقم التأشيرة": p.visa || "-",
+                    "أحقية الروضة": eligibilityText,
+                    "سبب / تفاصيل تصريح الروضة": p.reason || p.message || "-",
                     "الدور في المجموعة": p.roleInfo || "غير محدد",
                     "تابع للأدمن (القائد)": isLeader ? "هو الأدمن الرئيسي 👑" : (isCompanion ? (p.parentLeader || currentLeaderName) : "-"),
                     "Nusuk ID": (p.nusukId && p.nusukId !== "-") ? String(p.nusukId) : "-",
                     "حالة التسجيل في نسك": cleanStatus,
-                    "البريد الإلكتروني": p.email || clientEmail || "-",
-                    "حالة الحجز": p.raw ? (p.raw["حالة الحجز"] || "") : "",
-                    "موعد الحجز": p.raw ? (p.raw["موعد الحجز"] || "") : ""
+                    "البريد الإلكتروني": p.email || clientEmail || "-"
                 };
             });
 
@@ -1904,12 +2003,12 @@
 
             ws['!cols'] = [
                 { wch: 6 }, { wch: 28 }, { wch: 10 }, { wch: 16 },
-                { wch: 16 }, { wch: 30 }, { wch: 28 }, { wch: 20 },
-                { wch: 32 }, { wch: 38 }, { wch: 14 }, { wch: 14 }
+                { wch: 16 }, { wch: 22 }, { wch: 42 }, { wch: 26 },
+                { wch: 24 }, { wch: 18 }, { wch: 28 }, { wch: 32 }
             ];
 
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "بيانات المعتمرين وحالة نسك");
+            XLSX.utils.book_append_sheet(wb, ws, "بيانات المعتمرين وتصاريح الروضة");
 
             const today = new Date().toISOString().slice(0, 10);
             XLSX.writeFile(wb, `${batchName}_${today}.xlsx`);
