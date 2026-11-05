@@ -1695,6 +1695,9 @@ def recover_account_api(req: RegisterRequest):
             emu_key = "emu1" if role == "leader" else "emu2"
             comp_num = comp_count + 1
             mult = float(req.speed_multiplier or STATE.get("speed_multiplier", 1.0))
+            if req.speed_multiplier:
+                with _state_lock:
+                    STATE["speed_multiplier"] = mult
             dev = get_device(EMUS[emu_key]["serial"])
             return run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
         except Exception as e:
@@ -1706,6 +1709,9 @@ def _run_register(req: RegisterRequest) -> dict:
     p = req.pilgrim or {}
     dummy_name = "Ab"
     mult = float(req.speed_multiplier or STATE.get("speed_multiplier", 1.0))
+    if req.speed_multiplier:
+        with _state_lock:
+            STATE["speed_multiplier"] = mult
 
     email_val = extract_field(p, ["email", "البريد الالكتروني", "البريد الإلكتروني", "Email", "الايميل"]) or req.client_email.strip()
     password_val = extract_field(p, ["password", "الباسورد", "كلمة المرور", "Password", "pass"]) or DEFAULT_PASSWORD
