@@ -1587,10 +1587,9 @@ def restart_server_api():
 
     def _do_restart():
         time.sleep(0.6)
-        subprocess.Popen(
-            f'cmd.exe /c start "Nusuk Pro Engine" /D "{BASE_DIR}" "{sys.executable}" "{os.path.abspath(__file__)}"',
-            shell=True,
-        )
+        server_path = os.path.abspath(__file__)
+        ps_cmd = f'powershell.exe -NoExit -ExecutionPolicy Bypass -Command "Set-Location \'{BASE_DIR}\'; & \'{sys.executable}\' \'{server_path}\'"'
+        subprocess.Popen(f'start "Nusuk Pro Engine" {ps_cmd}', shell=True)
         os._exit(0)
 
     threading.Thread(target=_do_restart, daemon=True).start()
@@ -2053,7 +2052,7 @@ def register_browser_protocol():
         import winreg
         python_exe = sys.executable
         server_path = os.path.abspath(__file__)
-        cmd_str = f'cmd.exe /c start "Nusuk Pro Engine" /D "{BASE_DIR}" "{python_exe}" "{server_path}"'
+        cmd_str = f'powershell.exe -NoExit -ExecutionPolicy Bypass -Command "Set-Location \'{BASE_DIR}\'; & \'{python_exe}\' \'{server_path}\'"'
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\nusuk-server") as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Nusuk Local Server Launcher")
             winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
