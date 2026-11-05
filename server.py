@@ -1580,6 +1580,35 @@ def set_speed_api(multiplier: float = 1.0):
     return {"success": True, "speed_multiplier": mult}
 
 
+@app.api_route("/api/restart-server", methods=["POST", "GET"])
+def restart_server_api():
+    import sys
+    log.info("🔄 طلب إعادة تشغيل السيرفر من الواجهة...")
+
+    def _do_restart():
+        time.sleep(0.6)
+        subprocess.Popen(
+            f'cmd.exe /c start "Nusuk Pro Engine" /D "{BASE_DIR}" "{sys.executable}" "{os.path.abspath(__file__)}"',
+            shell=True,
+        )
+        os._exit(0)
+
+    threading.Thread(target=_do_restart, daemon=True).start()
+    return {"success": True, "message": "جاري إعادة تشغيل السيرفر..."}
+
+
+@app.api_route("/api/stop-server", methods=["POST", "GET"])
+def stop_server_api():
+    log.info("⏹️ طلب إيقاف السيرفر من الواجهة...")
+
+    def _do_stop():
+        time.sleep(0.5)
+        os._exit(0)
+
+    threading.Thread(target=_do_stop, daemon=True).start()
+    return {"success": True, "message": "تم إيقاف السيرفر بنجاح"}
+
+
 @app.get("/api/health")
 def health_check():
     busy = OP_LOCK.locked()
@@ -2017,8 +2046,43 @@ def _run_register(req: RegisterRequest) -> dict:
         return {"success": False, "status": "error", "error": str(e), "screenshot": shot}
 
 
+def register_browser_protocol():
+    """تسجيل بروتوكول nusuk-server:// في ويندوز لتشغيل السيرفر بضغطة زر من المتصفح"""
+    try:
+        import sys
+        import winreg
+        python_exe = sys.executable
+        server_path = os.path.abspath(__file__)
+        cmd_str = f'cmd.exe /c start "Nusuk Pro Engine" /D "{BASE_DIR}" "{python_exe}" "{server_path}"'
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\nusuk-server") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Nusuk Local Server Launcher")
+            winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\nusuk-server\shell\open\command") as cmd_key:
+            winreg.SetValueEx(cmd_key, "", 0, winreg.REG_SZ, cmd_str)
+    except Exception as e:
+        log.warning(f"تعذر تسجيل بروتوكول التشغيل التلقائي: {e}")
+
+
+def free_port_before_start(port: int):
+    """إغلاق أي نسخة قديمة عالقة على نفس البورت قبل بدء السيرفر"""
+    try:
+        my_pid = os.getpid()
+        out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True)
+        for line in out.splitlines():
+            parts = line.strip().split()
+            if len(parts) >= 5 and "LISTENING" in line:
+                pid = int(parts[-1])
+                if pid != my_pid and pid > 0:
+                    subprocess.run(f"taskkill /F /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    time.sleep(0.4)
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     import uvicorn
 
+    register_browser_protocol()
+    free_port_before_start(PORT)
     log.info(f"تشغيل السيرفر على {HOST}:{PORT} | Origins: {ALLOWED_ORIGINS}")
     uvicorn.run(app, host=HOST, port=PORT)
