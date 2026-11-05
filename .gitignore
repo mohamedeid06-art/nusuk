@@ -3,3 +3,6 @@ __pycache__/
 *$py.class
 active_queue.json
 .vscode/
+nusuk_engine.log*
+nusuk_state.json*
+fail_shots/
