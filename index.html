@@ -1,28 +1,75 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-theme="royal">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منظومة نُسُك الذكية | Nusuk Control Hub</title>
+    <title>منصة نُسُك للأتمتة والجدولة | Nusuk Pro</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS لقراءة وتصدير ملفات الإكسل -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Font Awesome للأيقونات -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- خطوط Cairo + JetBrains Mono -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- خطوط Cairo + Plus Jakarta Sans -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --nusuk-emerald: #0d9488;
-            --nusuk-mint: #10b981;
-            --nusuk-sand: #d4b483;
-            --nusuk-sand-light: #e5cca3;
-            --bg-main: #070d0f;
-            --bg-surface: #0c1619;
-            --bg-elevated: #111f24;
-            --border-subtle: rgba(212, 180, 131, 0.14);
-            --border-emerald: rgba(16, 185, 129, 0.25);
+        /* =========================================================
+           نظام الثيمات المتعددة (Royal Dark / Cyber Indigo / Pure Light)
+           ========================================================= */
+        :root, [data-theme="royal"] {
+            --bg-body: #060913;
+            --bg-card: rgba(15, 23, 42, 0.85);
+            --bg-card-elevated: rgba(22, 32, 58, 0.92);
+            --bg-input: rgba(7, 11, 22, 0.9);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-primary: #f59e0b;
+            --accent-secondary: #10b981;
+            --accent-glow: rgba(245, 158, 11, 0.25);
+            --grad-primary: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+            --grad-primary-text: #020617;
+            --bg-mesh:
+                radial-gradient(at 10% 10%, rgba(245, 158, 11, 0.1) 0px, transparent 40%),
+                radial-gradient(at 90% 10%, rgba(56, 189, 248, 0.08) 0px, transparent 40%),
+                radial-gradient(at 50% 95%, rgba(16, 185, 129, 0.07) 0px, transparent 45%);
+        }
+
+        [data-theme="cyber"] {
+            --bg-body: #090a10;
+            --bg-card: rgba(18, 20, 32, 0.88);
+            --bg-card-elevated: rgba(26, 29, 46, 0.94);
+            --bg-input: rgba(10, 12, 20, 0.92);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(99, 102, 241, 0.16);
+            --accent-primary: #6366f1;
+            --accent-secondary: #06b6d4;
+            --accent-glow: rgba(99, 102, 241, 0.28);
+            --grad-primary: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+            --grad-primary-text: #ffffff;
+            --bg-mesh:
+                radial-gradient(at 10% 10%, rgba(99, 102, 241, 0.14) 0px, transparent 40%),
+                radial-gradient(at 90% 15%, rgba(6, 182, 212, 0.12) 0px, transparent 40%),
+                radial-gradient(at 50% 90%, rgba(168, 85, 247, 0.08) 0px, transparent 45%);
+        }
+
+        [data-theme="light"] {
+            --bg-body: #f1f5f9;
+            --bg-card: rgba(255, 255, 255, 0.96);
+            --bg-card-elevated: #ffffff;
+            --bg-input: #f8fafc;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --border-color: #e2e8f0;
+            --accent-primary: #0f172a;
+            --accent-secondary: #059669;
+            --accent-glow: rgba(15, 23, 42, 0.1);
+            --grad-primary: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            --grad-primary-text: #ffffff;
+            --bg-mesh:
+                radial-gradient(at 10% 10%, rgba(245, 158, 11, 0.08) 0px, transparent 40%),
+                radial-gradient(at 90% 10%, rgba(16, 185, 129, 0.08) 0px, transparent 40%);
         }
 
         * {
@@ -31,68 +78,77 @@
 
         body {
             font-family: 'Cairo', sans-serif;
-            background-color: var(--bg-main);
-            color: #f1f5f9;
-            background-image:
-                radial-gradient(circle at 15% 0%, rgba(13, 148, 136, 0.12) 0%, transparent 40%),
-                radial-gradient(circle at 85% 0%, rgba(212, 180, 131, 0.08) 0%, transparent 35%),
-                linear-gradient(180deg, #070d0f 0%, #050a0c 100%);
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            background-image: var(--bg-mesh);
             background-attachment: fixed;
+            transition: background-color 0.25s ease, color 0.25s ease;
         }
 
         .font-mono-code {
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* أسطح وهوية نُسُك الرسمية */
-        .nusuk-panel {
-            background: rgba(12, 22, 25, 0.88);
+        /* الكروت والحاويات */
+        .studio-card {
+            background: var(--bg-card);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.55);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.35);
+            transition: all 0.25s ease;
         }
 
-        .nusuk-panel-sand {
-            background: linear-gradient(145deg, rgba(17, 31, 36, 0.94) 0%, rgba(10, 19, 22, 0.97) 100%);
-            border: 1px solid var(--border-subtle);
-            box-shadow: 0 14px 36px -10px rgba(0, 0, 0, 0.65);
+        .studio-card-highlight {
+            background: var(--bg-card-elevated);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(245, 158, 11, 0.28);
+            box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.45);
         }
 
-        /* أزرار هوية نسك */
-        .btn-nusuk-emerald {
-            background: linear-gradient(135deg, #0d9488 0%, #059669 100%);
-            color: #ffffff;
-            border: 1px solid rgba(52, 211, 153, 0.3);
+        [data-theme="light"] .studio-card,
+        [data-theme="light"] .studio-card-highlight {
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);
+        }
+
+        [data-theme="light"] .text-white {
+            color: #0f172a !important;
+        }
+        [data-theme="light"] .text-slate-300,
+        [data-theme="light"] .text-slate-400 {
+            color: #475569 !important;
+        }
+        [data-theme="light"] .bg-slate-950,
+        [data-theme="light"] .bg-slate-950\/90,
+        [data-theme="light"] .bg-slate-950\/80,
+        [data-theme="light"] .bg-slate-950\/60,
+        [data-theme="light"] .bg-slate-900,
+        [data-theme="light"] .bg-slate-900\/90 {
+            background-color: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        /* الأزرار */
+        .primary-gradient-btn {
+            background: var(--grad-primary);
+            color: var(--grad-primary-text) !important;
             transition: all 0.2s ease;
         }
-        .btn-nusuk-emerald:hover:not(:disabled) {
-            background: linear-gradient(135deg, #14b8a6 0%, #10b981 100%);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        .primary-gradient-btn:hover:not(:disabled) {
+            filter: brightness(1.08);
+            box-shadow: 0 6px 20px var(--accent-glow);
             transform: translateY(-1px);
         }
 
-        .btn-nusuk-sand {
-            background: linear-gradient(135deg, #d4b483 0%, #b8935c 100%);
-            color: #070d0f;
+        .emerald-gradient-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff !important;
             transition: all 0.2s ease;
         }
-        .btn-nusuk-sand:hover:not(:disabled) {
-            background: linear-gradient(135deg, #e5cca3 0%, #c8a46e 100%);
-            box-shadow: 0 6px 20px rgba(212, 180, 131, 0.28);
+        .emerald-gradient-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
             transform: translateY(-1px);
-        }
-
-        .btn-nusuk-outline {
-            background: rgba(17, 31, 36, 0.8);
-            border: 1px solid rgba(212, 180, 131, 0.22);
-            color: #e2e8f0;
-            transition: all 0.2s ease;
-        }
-        .btn-nusuk-outline:hover {
-            border-color: var(--nusuk-sand);
-            background: rgba(212, 180, 131, 0.1);
-            color: #ffffff;
         }
 
         /* حقول الإدخال */
@@ -103,7 +159,7 @@
         }
         .sleek-input-icon {
             position: absolute;
-            right: 13px;
+            right: 12px;
             color: #64748b;
             font-size: 13px;
             pointer-events: none;
@@ -111,258 +167,285 @@
         }
         .sleek-input {
             width: 100%;
-            background: #060b0d;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 11px;
+            background: var(--bg-input);
+            border: 1px solid rgba(100, 116, 139, 0.35);
+            border-radius: 12px;
             padding: 9px 36px 9px 12px;
             font-size: 12px;
-            color: #f8fafc;
+            color: var(--text-main);
             transition: all 0.2s;
             outline: none;
         }
         .sleek-input:focus {
-            border-color: var(--nusuk-emerald);
-            box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
         }
         .sleek-input-wrap:focus-within .sleek-input-icon {
-            color: #14b8a6;
+            color: #f59e0b;
         }
 
-        /* حالات المجموعة الحية */
+        /* حالات عقدة الأدمن والمرافقين */
         .admin-node-active {
-            border-color: var(--nusuk-sand) !important;
-            background: linear-gradient(135deg, rgba(212, 180, 131, 0.12) 0%, rgba(12, 22, 25, 0.95) 100%) !important;
-            box-shadow: 0 0 25px rgba(212, 180, 131, 0.12);
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 28px rgba(245, 158, 11, 0.2), inset 0 0 15px rgba(245, 158, 11, 0.06);
         }
         .comp-node-active {
             border-color: #10b981 !important;
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(12, 22, 25, 0.95) 100%) !important;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.16), inset 0 0 12px rgba(16, 185, 129, 0.05);
         }
         .slot-waiting-pulse {
-            animation: pulseTeal 2.2s infinite ease-in-out;
+            animation: pulseSlot 2s infinite ease-in-out;
             border-style: dashed !important;
         }
-        @keyframes pulseTeal {
-            0%, 100% { border-color: rgba(20, 184, 166, 0.3); background: rgba(12, 22, 25, 0.5); }
-            50% { border-color: rgba(20, 184, 166, 0.9); background: rgba(20, 184, 166, 0.08); }
+        @keyframes pulseSlot {
+            0%, 100% { border-color: rgba(56, 189, 248, 0.35); }
+            50% { border-color: rgba(56, 189, 248, 0.95); box-shadow: 0 0 18px rgba(56, 189, 248, 0.18); }
         }
 
         .nat-btn-active {
-            background: linear-gradient(135deg, #d4b483 0%, #b8935c 100%) !important;
-            color: #070d0f !important;
-            border-color: #e5cca3 !important;
-            font-weight: 900 !important;
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important;
+            color: #020617 !important;
+            border-color: #fde047 !important;
+            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+            transform: scale(1.02);
         }
 
-        .batch-tab-active {
-            background: linear-gradient(135deg, rgba(13, 148, 136, 0.22) 0%, rgba(17, 31, 36, 0.95) 100%) !important;
-            border-color: #14b8a6 !important;
-            color: #ffffff !important;
-            box-shadow: 0 4px 14px rgba(13, 148, 136, 0.2);
+        .batch-item-active {
+            border-color: #f59e0b !important;
+            background: rgba(245, 158, 11, 0.14) !important;
         }
 
-        .kpi-card-active {
-            border-color: var(--nusuk-sand) !important;
-            background: rgba(212, 180, 131, 0.1) !important;
-        }
-
-        .filter-pill-active {
-            background: rgba(13, 148, 136, 0.22) !important;
-            color: #5eead4 !important;
-            border-color: rgba(20, 184, 166, 0.5) !important;
+        .kpi-active-filter {
+            ring: 2px solid #f59e0b;
+            transform: translateY(-2px);
         }
 
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #060b0d; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; }
-        ::-webkit-scrollbar-thumb:hover { background: #0d9488; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
     </style>
 </head>
 <body class="min-h-screen p-3 md:p-5">
 
-    <div class="max-w-[1480px] mx-auto space-y-4">
-
-        <!-- ========================================================================= -->
-        <!-- 1. الشريط العلوي المدمج (Top Navigation & Telemetry Bar) -->
-        <!-- ========================================================================= -->
-        <header class="nusuk-panel-sand px-4 py-3 rounded-2xl flex flex-wrap justify-between items-center gap-3 sticky top-2 z-30">
-            <!-- الشعار والاسم الجديد -->
-            <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-xl btn-nusuk-sand flex items-center justify-center text-xl shadow-md">
-                    <i class="fa-solid fa-kaaba"></i>
-                </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h1 class="text-lg md:text-xl font-black text-white tracking-wide">
-                            منظومة نُسُك الذكية
-                        </h1>
-                        <span class="text-[10px] px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30 font-bold">
-                            إدارة الأفواج والروضة
-                        </span>
-                    </div>
-                    <p class="text-[11px] text-slate-400">الربط العائلي التلقائي وفحص أحقية تصاريح الروضة الشريفة</p>
-                </div>
+    <!-- 🌟 الشريط العلوي الرئيسي (Header) 🌟 -->
+    <header class="max-w-[1440px] mx-auto mb-5 studio-card-highlight p-4 md:px-6 rounded-2xl flex flex-wrap justify-between items-center gap-4">
+        <!-- اللوجو والعنوان -->
+        <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-2xl primary-gradient-btn flex items-center justify-center font-bold text-2xl shadow-lg">
+                <i class="fa-solid fa-kaaba"></i>
             </div>
-
-            <!-- أزرار الفتح السريع للإعدادات والإضافة (بدل زحمة العمود الجانبي) -->
-            <div class="flex items-center gap-2 flex-wrap">
-                <!-- زر فتح درج إعدادات الـ OTP والجنسية -->
-                <button onclick="toggleDrawer('settingsDrawer')" id="btnOpenSettingsDrawer" class="px-3.5 py-2 rounded-xl btn-nusuk-outline text-xs font-extrabold flex items-center gap-2">
-                    <i class="fa-solid fa-sliders text-[#d4b483]"></i>
-                    <span>إعدادات البريد والجنسية</span>
-                    <span id="headerSummaryNatBadge" class="px-2 py-0.5 rounded-md bg-black/40 text-[#e5cca3] text-[10px] font-bold">مصر</span>
-                </button>
-
-                <!-- زر فتح درج إضافة المعتمرين ورفع الشيتات -->
-                <button onclick="toggleDrawer('uploadDrawer')" id="btnOpenUploadDrawer" class="px-3.5 py-2 rounded-xl btn-nusuk-emerald text-xs font-extrabold flex items-center gap-2 shadow">
-                    <i class="fa-solid fa-file-circle-plus"></i>
-                    <span>رفع شيت Excel / إضافة معتمر</span>
-                </button>
-            </div>
-
-            <!-- مؤشرات المحاكيات والسيرفر والطباعة -->
-            <div class="flex items-center gap-2 flex-wrap">
-                <!-- محاكي 1 -->
-                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/45 border border-white/10 text-xs font-bold">
-                    <span class="text-[#d4b483] text-[11px]"><i class="fa-solid fa-crown ml-1"></i>محاكي 1:</span>
-                    <span id="emu1CounterText" class="px-1.5 py-0.5 rounded bg-white/5 text-[#e5cca3] font-mono-code text-[11px]">0/5</span>
-                    <button id="btnRandEmu1" onclick="manualRandomizeEmulator('emu1')" title="تغيير بصمة و ID المحاكي الأول وعمل ريستارت" class="px-2 py-0.5 rounded-lg bg-[#d4b483]/15 hover:bg-[#d4b483] text-[#e5cca3] hover:text-slate-950 transition text-[10px] font-black">
-                        <i class="fa-solid fa-fingerprint"></i> ID
-                    </button>
-                </div>
-
-                <!-- محاكي 2 -->
-                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/45 border border-white/10 text-xs font-bold">
-                    <span class="text-teal-400 text-[11px]"><i class="fa-solid fa-users ml-1"></i>محاكي 2:</span>
-                    <span id="emu2CounterText" class="px-1.5 py-0.5 rounded bg-white/5 text-teal-300 font-mono-code text-[11px]">0/5</span>
-                    <button id="btnRandEmu2" onclick="manualRandomizeEmulator('emu2')" title="تغيير بصمة و ID المحاكي الثاني وعمل ريستارت" class="px-2 py-0.5 rounded-lg bg-teal-500/15 hover:bg-teal-500 text-teal-300 hover:text-slate-950 transition text-[10px] font-black">
-                        <i class="fa-solid fa-fingerprint"></i> ID
-                    </button>
-                </div>
-
-                <!-- السرعة -->
-                <div class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/45 border border-white/10 text-xs font-bold" title="معامل سرعة الانتظار">
-                    <i class="fa-solid fa-gauge-high text-teal-400 text-[11px]"></i>
-                    <select id="speedMultSelect" onchange="updateServerSpeed(this.value)" class="bg-transparent text-slate-200 font-bold text-[11px] focus:outline-none cursor-pointer">
-                        <option value="0.8" class="bg-slate-900">0.8x سريع</option>
-                        <option value="1.0" selected class="bg-slate-900">1.0x عادي</option>
-                        <option value="1.3" class="bg-slate-900">1.3x هادئ</option>
-                        <option value="1.6" class="bg-slate-900">1.6x بطيء</option>
-                    </select>
-                </div>
-
-                <!-- حالة السيرفر -->
-                <div id="serverStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/45 border border-white/10 text-xs font-bold">
-                    <span id="statusDot" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                    <span id="statusText" class="text-slate-300 text-[11px]">فحص...</span>
-                </div>
-
-                <button onclick="checkEmulatorsHealth()" title="فحص اتصال وصحة المحاكيين" class="p-2 rounded-xl bg-black/45 hover:bg-white/10 text-teal-400 border border-white/10 text-xs transition">
-                    <i class="fa-solid fa-heart-pulse"></i>
-                </button>
-                <button onclick="resetServerState()" title="تصفير حالة المجموعة أو العدادات في السيرفر" class="p-2 rounded-xl bg-black/45 hover:bg-white/10 text-[#d4b483] border border-white/10 text-xs transition">
-                    <i class="fa-solid fa-rotate"></i>
-                </button>
-                <button onclick="printGroupsToPDF()" title="طباعة كروت المجموعات PDF" class="px-3 py-1.5 rounded-xl btn-nusuk-sand text-xs font-black flex items-center gap-1.5">
-                    <i class="fa-solid fa-print"></i> PDF
-                </button>
-                <button onclick="exportResultsToExcel()" title="تصدير الكشف Excel" class="px-3 py-1.5 rounded-xl btn-nusuk-emerald text-xs font-extrabold flex items-center gap-1.5">
-                    <i class="fa-solid fa-file-excel"></i> Excel
-                </button>
-            </div>
-        </header>
-
-        <!-- ========================================================================= -->
-        <!-- 2. الدرج العلوي القابل للطي: إعدادات البريد (OTP) والجنسية (يفتح عند الطلب) -->
-        <!-- ========================================================================= -->
-        <section id="settingsDrawer" class="hidden nusuk-panel-sand rounded-2xl p-5 border border-[#d4b483]/30 transition-all">
-            <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+            <div>
                 <div class="flex items-center gap-2.5">
-                    <i class="fa-solid fa-user-shield text-[#d4b483] text-lg"></i>
-                    <h2 class="text-sm font-black text-white">إعدادات بريد استلام الكود (OTP) وبوصلة الجنسية للفوج الحالي</h2>
+                    <h1 class="text-xl md:text-2xl font-black tracking-tight text-white">
+                        منصة نُسُك الذكية
+                    </h1>
+                    <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-extrabold">
+                        V6.2 Pro
+                    </span>
                 </div>
-                <button onclick="toggleDrawer('settingsDrawer')" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold">
-                    إغلاق <i class="fa-solid fa-xmark mr-1"></i>
+                <p class="text-xs text-slate-400 mt-0.5">نظام الربط العائلي، استرجاع الحسابات، وفحص أحقية تصاريح الروضة الشريفة</p>
+            </div>
+        </div>
+
+        <!-- أدوات التحكم في المحاكيات + اختيار الثيم + التصدير -->
+        <div class="flex items-center gap-2 flex-wrap">
+
+            <!-- مبدل الثيم الفوري (3 ألوان احترافية) -->
+            <div class="flex items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800 text-[11px] font-bold" title="تغيير مظهر وألوان المنصة">
+                <button onclick="setAppTheme('royal')" id="themeBtn_royal" class="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-extrabold transition">
+                    ملكي
+                </button>
+                <button onclick="setAppTheme('cyber')" id="themeBtn_cyber" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">
+                    نيون
+                </button>
+                <button onclick="setAppTheme('light')" id="themeBtn_light" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">
+                    فاتح ☀️
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                <!-- قسم إيميل الـ OTP والمكاتب المحفوظة (7 أعمدة) -->
-                <div class="lg:col-span-7 space-y-3 bg-black/30 p-4 rounded-xl border border-white/5">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-xs font-extrabold text-[#e5cca3]"><i class="fa-solid fa-envelope-circle-check ml-1"></i> بيانات حساب استلام رمز التحقق (Gmail):</span>
-                        <div class="flex items-center gap-2 flex-1 max-w-xs">
-                            <select id="savedProfilesSelect" onchange="loadSelectedProfile()" class="w-full bg-[#060b0d] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-teal-500">
-                                <option value="">-- اختر مكتباً محفوظاً --</option>
-                            </select>
-                            <button onclick="deleteSelectedProfile()" title="حذف المكتب المحدد" class="px-2.5 py-1.5 bg-red-500/15 hover:bg-red-600 text-red-300 hover:text-white rounded-lg transition text-xs">
-                                <i class="fa-solid fa-trash-can"></i>
-                            </button>
+            <!-- بصمة محاكي 1 -->
+            <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-950/90 border border-amber-500/30 text-xs font-bold">
+                <i class="fa-solid fa-crown text-amber-400"></i>
+                <span class="text-slate-300">محاكي 1:</span>
+                <span id="emu1CounterText" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono-code font-black">0/5</span>
+                <button id="btnRandEmu1" onclick="manualRandomizeEmulator('emu1')" title="تغيير بصمة و ID المحاكي الأول وعمل ريستارت الآن" class="mr-1 px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/40 transition flex items-center gap-1 text-[11px] font-extrabold">
+                    <i class="fa-solid fa-fingerprint"></i> تغيير ID
+                </button>
+            </div>
+
+            <!-- بصمة محاكي 2 -->
+            <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-950/90 border border-purple-500/30 text-xs font-bold">
+                <i class="fa-solid fa-users text-purple-400"></i>
+                <span class="text-slate-300">محاكي 2:</span>
+                <span id="emu2CounterText" class="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-mono-code font-black">0/5</span>
+                <button id="btnRandEmu2" onclick="manualRandomizeEmulator('emu2')" title="تغيير بصمة و ID المحاكي الثاني وعمل ريستارت الآن" class="mr-1 px-2 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500 text-purple-400 hover:text-slate-950 border border-purple-500/40 transition flex items-center gap-1 text-[11px] font-extrabold">
+                    <i class="fa-solid fa-fingerprint"></i> تغيير ID
+                </button>
+            </div>
+
+            <!-- حالة السيرفر -->
+            <div id="serverStatusBadge" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold">
+                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                <span id="statusText" class="text-slate-300">فحص الاتصال...</span>
+            </div>
+
+            <!-- فحص وتصفير -->
+            <button onclick="checkEmulatorsHealth()" title="فحص اتصال وصحة المحاكيين" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5">
+                <i class="fa-solid fa-heart-pulse"></i> فحص
+            </button>
+            <button onclick="resetServerState()" title="تصفير حالة الطوارئ في السيرفر" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-amber-600/20 text-amber-400 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5">
+                <i class="fa-solid fa-screwdriver-wrench"></i> تصفير الحالة
+            </button>
+
+            <!-- طباعة PDF وتصدير Excel -->
+            <button onclick="printGroupsToPDF()" class="px-3.5 py-2 rounded-xl primary-gradient-btn text-xs font-black flex items-center gap-1.5 shadow-lg">
+                <i class="fa-solid fa-print"></i> طباعة PDF
+            </button>
+            <button onclick="exportResultsToExcel()" class="px-3.5 py-2 rounded-xl emerald-gradient-btn text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                <i class="fa-solid fa-file-excel"></i> تصدير Excel
+            </button>
+        </div>
+    </header>
+
+    <!-- 🌟 الشبكة الرئيسية (Main Grid: 4 cols Right Sidebar + 8 cols Left Workspace) 🌟 -->
+    <main class="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- 🎨 العمود الأيمن: الكابينة الجانبية المنظمة (4 أعمدة) 🎨 -->
+        <aside class="lg:col-span-4 space-y-5">
+
+            <!-- 1. مدير جدولة الأفواج المتتالية -->
+            <div class="studio-card rounded-2xl p-5 border-r-4 border-r-purple-500">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-black text-white">جدولة الأفواج المتتالية</h2>
+                            <p class="text-[10px] text-slate-400">يخلص الفوج ويدخل على اللي بعده تلقائياً</p>
                         </div>
                     </div>
+                    <button onclick="createNewEmptyBatch()" class="px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-slate-950 border border-purple-500/30 text-[11px] font-black transition flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> فوج جديد
+                    </button>
+                </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                        <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">اسم الفوج / المكتب:</label>
-                            <div class="sleek-input-wrap">
-                                <input id="profileName" type="text" placeholder="مثال: فوج طواف - نوفمبر" oninput="syncCurrentBatchSettings()" class="sleek-input">
-                                <i class="fa-solid fa-building-user sleek-input-icon"></i>
-                            </div>
+                <div id="batchesListContainer" class="space-y-2 max-h-48 overflow-y-auto pr-1 mb-3">
+                    <!-- يتم توليد الأفواج هنا -->
+                </div>
+
+                <button id="btnRunAllBatches" onclick="startAllScheduledBatches()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs transition flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-forward-fast"></i> تشغيل كل الأفواج المجدولة بالتتابع
+                </button>
+            </div>
+
+            <!-- 2. مركز استلام الكود (OTP) -->
+            <div class="studio-card rounded-2xl p-5 border-r-4 border-r-amber-500">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow">
+                            <i class="fa-solid fa-shield-halved"></i>
                         </div>
                         <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">البريد الإلكتروني (Gmail):</label>
-                            <div class="sleek-input-wrap">
-                                <input id="clientEmail" type="email" dir="ltr" placeholder="office@gmail.com" oninput="saveActiveCredentials(); syncCurrentBatchSettings();" class="sleek-input text-left font-mono-code">
-                                <i class="fa-solid fa-at sleek-input-icon"></i>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">كلمة مرور التطبيقات (16 حرف):</label>
-                            <div class="sleek-input-wrap">
-                                <input id="clientPass" type="password" dir="ltr" placeholder="xxxx xxxx xxxx xxxx" oninput="saveActiveCredentials(); syncCurrentBatchSettings();" class="sleek-input text-left font-mono-code pl-8">
-                                <i class="fa-solid fa-key sleek-input-icon"></i>
-                                <button type="button" onclick="togglePassVisibility()" class="absolute left-2.5 text-slate-400 hover:text-white text-xs">
-                                    <i id="passEyeIcon" class="fa-solid fa-eye"></i>
-                                </button>
-                            </div>
+                            <h2 class="text-sm font-black text-white">مركز استلام الكود (OTP)</h2>
+                            <p class="text-[10px] text-slate-400">خاص بالفوج المحدد حالياً</p>
                         </div>
                     </div>
+                    <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/25 font-extrabold">
+                        <i class="fa-solid fa-lock text-[9px] ml-1"></i>حفظ فوري
+                    </span>
+                </div>
 
-                    <div class="flex justify-end pt-1">
-                        <button onclick="saveCurrentProfile()" class="px-4 py-2 rounded-xl btn-nusuk-sand font-black text-xs flex items-center gap-2">
-                            <i class="fa-solid fa-floppy-disk"></i> حفظ بيانات المكتب في القائمة الدائمة
+                <div class="mb-3.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <label class="block text-[11px] text-amber-400 font-bold mb-1.5">
+                        <i class="fa-solid fa-folder-open ml-1"></i>تبديل سريع بين الإيميلات المحفوظة:
+                    </label>
+                    <div class="flex gap-2">
+                        <select id="savedProfilesSelect" onchange="loadSelectedProfile()" class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
+                            <option value="">-- اختر مكتب / إيميل محفوظ --</option>
+                        </select>
+                        <button onclick="deleteSelectedProfile()" title="حذف هذا المكتب" class="px-3 py-2 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 rounded-xl transition">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- قسم بوصلة الجنسية (5 أعمدة) -->
-                <div class="lg:col-span-5 space-y-3 bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col justify-between">
+                <div class="space-y-3">
                     <div>
-                        <span class="text-xs font-extrabold text-teal-300 block mb-2.5"><i class="fa-solid fa-earth-africa ml-1"></i> اختيار الجنسية التلقائي للفوج:</span>
-                        <div class="grid grid-cols-3 gap-2 mb-3">
-                            <button id="btnNatEgypt" type="button" onclick="setNatPreset('مصر', '2')" class="nat-preset-btn py-2 px-2 rounded-xl bg-[#060b0d] hover:bg-[#d4b483]/20 text-xs font-bold border border-white/10 transition flex items-center justify-center gap-1.5">
-                                <span>🇪🇬</span><span>مصر</span>
-                            </button>
-                            <button id="btnNatThailand" type="button" onclick="setNatPreset('تايلاند', '1')" class="nat-preset-btn py-2 px-2 rounded-xl bg-[#060b0d] hover:bg-[#d4b483]/20 text-xs font-bold border border-white/10 transition flex items-center justify-center gap-1.5">
-                                <span>🇹🇭</span><span>تايلاند</span>
-                            </button>
-                            <button id="btnNatMorocco" type="button" onclick="setNatPreset('المغرب', '1')" class="nat-preset-btn py-2 px-2 rounded-xl bg-[#060b0d] hover:bg-[#d4b483]/20 text-xs font-bold border border-white/10 transition flex items-center justify-center gap-1.5">
-                                <span>🇲🇦</span><span>المغرب</span>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">اسم الفوج / المكتب (يظهر في الطباعة):</label>
+                        <div class="sleek-input-wrap">
+                            <input id="profileName" type="text" placeholder="مثال: فوج إبراهيم الطيار - 30 أكتوبر" oninput="syncCurrentBatchSettings()" class="sleek-input">
+                            <i class="fa-solid fa-building-user sleek-input-icon"></i>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">البريد الإلكتروني الأساسي (Gmail):</label>
+                        <div class="sleek-input-wrap">
+                            <input id="clientEmail" type="email" dir="ltr" placeholder="office@gmail.com" oninput="saveActiveCredentials(); syncCurrentBatchSettings();" class="sleek-input text-left font-mono-code">
+                            <i class="fa-solid fa-at sleek-input-icon"></i>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">كلمة مرور التطبيقات (16 حرف):</label>
+                        <div class="sleek-input-wrap">
+                            <input id="clientPass" type="password" dir="ltr" placeholder="xxxx xxxx xxxx xxxx" oninput="saveActiveCredentials(); syncCurrentBatchSettings();" class="sleek-input text-left font-mono-code pl-9">
+                            <i class="fa-solid fa-key sleek-input-icon"></i>
+                            <button type="button" onclick="togglePassVisibility()" class="absolute left-3 text-slate-400 hover:text-amber-400 text-xs">
+                                <i id="passEyeIcon" class="fa-solid fa-eye"></i>
                             </button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2.5">
+                    <button onclick="saveCurrentProfile()" class="w-full py-2.5 rounded-xl primary-gradient-btn font-black text-xs flex items-center justify-center gap-2 shadow-lg mt-1">
+                        <i class="fa-solid fa-floppy-disk"></i> حفظ الإيميل في القائمة الدائمة
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. بوصلة الجنسية التلقائية -->
+            <div class="studio-card rounded-2xl p-5 border-r-4 border-r-emerald-500">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow">
+                            <i class="fa-solid fa-earth-africa"></i>
+                        </div>
                         <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">نص البحث:</label>
+                            <h2 class="text-sm font-black text-white">بوصلة الجنسية التلقائية</h2>
+                            <p class="text-[10px] text-slate-400">تُحفظ لكل فوج بشكل مستقل</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btnNatEgypt" type="button" onclick="setNatPreset('مصر', '2')" class="nat-preset-btn py-2 px-2 rounded-xl bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-xs font-extrabold border border-slate-800 transition flex flex-col items-center gap-1">
+                            <span class="text-base">🇪🇬</span>
+                            <span>مصر</span>
+                        </button>
+                        <button id="btnNatThailand" type="button" onclick="setNatPreset('تايلاند', '1')" class="nat-preset-btn py-2 px-2 rounded-xl bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-xs font-extrabold border border-slate-800 transition flex flex-col items-center gap-1">
+                            <span class="text-base">🇹🇭</span>
+                            <span>تايلاند</span>
+                        </button>
+                        <button id="btnNatMorocco" type="button" onclick="setNatPreset('المغرب', '1')" class="nat-preset-btn py-2 px-2 rounded-xl bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-xs font-extrabold border border-slate-800 transition flex flex-col items-center gap-1">
+                            <span class="text-base">🇲🇦</span>
+                            <span>المغرب</span>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5 pt-1">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 font-bold mb-1">الكتابة في البحث:</label>
                             <div class="sleek-input-wrap">
                                 <input id="natText" type="text" value="مصر" oninput="saveNatSettings(); syncCurrentBatchSettings();" class="sleek-input font-bold">
                                 <i class="fa-solid fa-flag sleek-input-icon"></i>
                             </div>
                         </div>
                         <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">ترتيب الاختيار:</label>
-                            <select id="natOption" onchange="saveNatSettings(); syncCurrentBatchSettings();" class="w-full bg-[#060b0d] border border-white/10 rounded-xl px-3 py-2 text-xs text-[#e5cca3] font-bold focus:outline-none">
+                            <label class="block text-[10px] text-slate-400 font-bold mb-1">ترتيب القائمة:</label>
+                            <select id="natOption" onchange="saveNatSettings(); syncCurrentBatchSettings();" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-400">
                                 <option value="1">الخيار الأول (195)</option>
                                 <option value="2" selected>الخيار الثاني (275)</option>
                             </select>
@@ -370,334 +453,259 @@
                     </div>
                 </div>
             </div>
-        </section>
 
-        <!-- ========================================================================= -->
-        <!-- 3. الدرج العلوي القابل للطي: رفع شيتات الإكسل أو إضافة معتمر يدوياً -->
-        <!-- ========================================================================= -->
-        <section id="uploadDrawer" class="hidden nusuk-panel-sand rounded-2xl p-5 border border-teal-500/30 transition-all">
-            <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
-                <div class="flex items-center gap-2.5">
-                    <i class="fa-solid fa-file-import text-teal-400 text-lg"></i>
-                    <h2 class="text-sm font-black text-white">بوابة استيراد شيتات Excel وإضافة المعتمرين</h2>
+            <!-- 4. إضافة معتمرين / رفع شيتات Excel -->
+            <div class="studio-card rounded-2xl p-5 border-r-4 border-r-sky-500">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow">
+                            <i class="fa-solid fa-users-gear"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-black text-white">إضافة معتمرين / شيتات</h2>
+                            <p class="text-[10px] text-slate-400">يمكنك رفع أكثر من شيت لجدولتهم</p>
+                        </div>
+                    </div>
                 </div>
-                <button onclick="toggleDrawer('uploadDrawer')" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold">
-                    إغلاق <i class="fa-solid fa-xmark mr-1"></i>
-                </button>
-            </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                <!-- رفع الإكسل (6 أعمدة) -->
-                <div class="lg:col-span-6 bg-black/30 p-4 rounded-xl border border-white/5 space-y-3">
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="font-extrabold text-teal-300"><i class="fa-solid fa-file-excel ml-1"></i> رفع ملفات Excel (يدعم رفع عدة شيتات معاً):</span>
-                        <select id="excelUploadMode" class="bg-[#060b0d] text-[#e5cca3] font-bold border border-white/15 rounded-lg px-2.5 py-1 text-[11px] focus:outline-none">
+                <div class="grid grid-cols-2 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 mb-3.5 text-xs font-bold">
+                    <button id="sideTabExcel" onclick="switchSideInputMode('excel')" class="py-1.5 rounded-lg bg-sky-500 text-slate-950 font-extrabold transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> رفع شيتات Excel
+                    </button>
+                    <button id="sideTabManual" onclick="switchSideInputMode('manual')" class="py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-user-plus"></i> إضافة يدوية
+                    </button>
+                </div>
+
+                <!-- قسم رفع الإكسل -->
+                <div id="sideExcelPanel" class="space-y-2.5">
+                    <div class="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-xl border border-slate-800 text-[11px]">
+                        <span class="text-slate-300 font-bold">طريقة إدراج الشيت:</span>
+                        <select id="excelUploadMode" class="bg-slate-900 text-amber-400 font-bold border border-slate-700 rounded-lg px-2 py-1 text-[11px] focus:outline-none">
                             <option value="new_batch">إنشاء كفوج جديد في الجدولة</option>
                             <option value="append">إضافة للفوج المفتوح حالياً</option>
                         </select>
                     </div>
 
-                    <label class="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-teal-500/35 hover:border-[#d4b483] rounded-xl cursor-pointer bg-[#060b0d]/70 hover:bg-[#060b0d] transition p-3 text-center">
-                        <i class="fa-solid fa-cloud-arrow-up text-2xl text-teal-400 mb-1.5"></i>
-                        <p class="text-xs text-white font-extrabold">اضغط لاختيار ملفات Excel من جهازك</p>
-                        <p class="text-[10px] text-slate-400">يستخرج الاسم، رقم الجواز، رقم التأشيرة، والإيميل تلقائياً</p>
+                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-sky-500/40 hover:border-amber-400 rounded-2xl cursor-pointer bg-slate-950/50 hover:bg-slate-900/70 transition group p-4 text-center">
+                        <div class="w-11 h-11 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 group-hover:text-amber-400 group-hover:scale-110 transition mb-1.5">
+                            <i class="fa-solid fa-cloud-arrow-up text-xl"></i>
+                        </div>
+                        <p class="text-xs text-white font-extrabold">اضغط لرفع شيت Excel (أو عدة شيتات معاً)</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">يدعم التحديد المتعدد لجدولة عدة أفواج دفعة واحدة</p>
                         <input id="excelFileInput" type="file" multiple accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)" />
                     </label>
                 </div>
 
-                <!-- إضافة معتمر يدوياً (6 أعمدة) -->
-                <div class="lg:col-span-6 bg-black/30 p-4 rounded-xl border border-white/5 flex flex-col justify-between space-y-3">
-                    <span class="text-xs font-extrabold text-[#e5cca3]"><i class="fa-solid fa-user-plus ml-1"></i> أو إدراج معتمر واحد يدوياً في الفوج الحالي:</span>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <!-- قسم الإضافة اليدوية -->
+                <div id="sideManualPanel" class="hidden space-y-2.5">
+                    <div class="sleek-input-wrap">
+                        <input id="manualName" type="text" placeholder="اسم المعتمر رباعي" class="sleek-input">
+                        <i class="fa-solid fa-user sleek-input-icon"></i>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
                         <div class="sleek-input-wrap">
-                            <input id="manualName" type="text" placeholder="اسم المعتمر (اختياري)" class="sleek-input">
-                            <i class="fa-solid fa-user sleek-input-icon"></i>
-                        </div>
-                        <div class="sleek-input-wrap">
-                            <input id="manualEmail" type="email" placeholder="إيميل مخصص (اختياري)" dir="ltr" class="sleek-input text-left font-mono-code">
-                            <i class="fa-solid fa-envelope sleek-input-icon"></i>
-                        </div>
-                        <div class="sleek-input-wrap">
-                            <input id="manualPassport" type="text" placeholder="رقم الجواز *" dir="ltr" class="sleek-input text-left font-mono-code">
+                            <input id="manualPassport" type="text" placeholder="رقم الجواز" dir="ltr" class="sleek-input text-left font-mono-code">
                             <i class="fa-solid fa-passport sleek-input-icon"></i>
                         </div>
                         <div class="sleek-input-wrap">
-                            <input id="manualVisa" type="text" placeholder="رقم التأشيرة *" dir="ltr" class="sleek-input text-left font-mono-code">
+                            <input id="manualVisa" type="text" placeholder="التأشيرة" dir="ltr" class="sleek-input text-left font-mono-code">
                             <i class="fa-solid fa-stamp sleek-input-icon"></i>
                         </div>
                     </div>
-                    <button onclick="addManualPilgrim()" class="w-full py-2 rounded-xl btn-nusuk-emerald font-extrabold text-xs flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-plus"></i> إضافة المعتمر للقائمة
+                    <div class="sleek-input-wrap">
+                        <input id="manualEmail" type="email" placeholder="إيميل الحساب (اختياري)" dir="ltr" class="sleek-input text-left font-mono-code">
+                        <i class="fa-solid fa-envelope sleek-input-icon"></i>
+                    </div>
+                    <button onclick="addManualPilgrim()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition flex items-center justify-center gap-1.5 shadow-lg">
+                        <i class="fa-solid fa-plus-circle"></i> إدراج في الفوج الحالي
                     </button>
                 </div>
             </div>
-        </section>
 
-        <!-- ========================================================================= -->
-        <!-- 4. شريط الأفواج الأفقي السريع (Horizontal Batch Ribbon) -->
-        <!-- ========================================================================= -->
-        <section class="nusuk-panel px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2 overflow-x-auto py-0.5 flex-1" id="batchesListContainer">
-                <!-- يتم توليد تبويبات الأفواج أفقياً هنا -->
-            </div>
+        </aside>
 
-            <div class="flex items-center gap-2 shrink-0">
-                <button onclick="createNewEmptyBatch()" class="px-3 py-1.5 rounded-xl btn-nusuk-outline text-xs font-bold flex items-center gap-1.5">
-                    <i class="fa-solid fa-plus text-[#d4b483]"></i> فوج جديد
-                </button>
-                <button id="btnRunAllBatches" onclick="startAllScheduledBatches()" class="px-3.5 py-1.5 rounded-xl btn-nusuk-sand text-xs font-black flex items-center gap-1.5 shadow">
-                    <i class="fa-solid fa-forward-fast"></i> تشغيل كل الأفواج بالتتابع
-                </button>
-            </div>
-        </section>
+        <!-- 🎯 العمود الأيسر: شجرة المجموعة الحية + الكروت والجدول (8 أعمدة) 🎯 -->
+        <section class="lg:col-span-8 space-y-5">
 
-        <!-- ========================================================================= -->
-        <!-- 5. شريط المجموعة النشطة الأفقي المدمج (Horizontal Live Group Pipeline) -->
-        <!-- ========================================================================= -->
-        <section class="nusuk-panel-sand p-4 rounded-2xl space-y-3.5">
-            <!-- رأس شريط المجموعة -->
-            <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <span class="px-2.5 py-1 rounded-lg bg-[#d4b483]/15 text-[#e5cca3] border border-[#d4b483]/30 text-xs font-black flex items-center gap-1.5">
-                        <i class="fa-solid fa-users-rectangle"></i> المجموعة العائلية النشطة الآن
-                    </span>
-                    <span id="activeBatchHeaderTag" class="text-xs px-2.5 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30 font-bold">
-                        الفوج #1
-                    </span>
-                    <span class="text-slate-600">|</span>
-                    <p id="nextTargetBadge" class="text-xs font-bold text-[#e5cca3] flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-teal-400 animate-ping"></span>
-                        <span>جاري المزامنة مع المحاكيات...</span>
-                    </p>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span>إنجاز الفوج:</span>
-                        <span id="batchProgressPercent" class="text-teal-300 font-mono-code font-extrabold">0%</span>
-                        <div class="w-24 h-2 bg-black/50 rounded-full overflow-hidden border border-white/10">
-                            <div id="batchProgressBar" class="h-full bg-gradient-to-l from-teal-400 to-[#d4b483] transition-all duration-500" style="width: 0%"></div>
+            <!-- 🌟 1. خريطة الربط العنقودية الحية (Live Group Architecture) 🌟 -->
+            <div class="studio-card-highlight p-5 rounded-2xl relative overflow-hidden">
+                <div class="flex flex-wrap justify-between items-center gap-3 pb-4 mb-5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg shadow">
+                            <i class="fa-solid fa-sitemap"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-black text-white">غرفة عمليات المجموعة النشطة الآن</h3>
+                                <span id="activeBatchHeaderTag" class="text-[11px] px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-extrabold">
+                                    الفوج #1
+                                </span>
+                            </div>
+                            <p id="nextTargetBadge" class="text-xs font-bold text-amber-400 mt-0.5">
+                                جاري المزامنة مع المحاكيات...
+                            </p>
                         </div>
                     </div>
 
-                    <button id="btnForceCloseGroup" onclick="forceCloseCurrentGroup()" class="hidden px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5">
+                    <button id="btnForceCloseGroup" onclick="forceCloseCurrentGroup()" class="hidden px-4 py-2 rounded-xl bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-extrabold transition flex items-center gap-2 shadow-lg">
                         <i class="fa-solid fa-power-off"></i> إنهاء المجموعة وتخريج الأدمن
                     </button>
                 </div>
-            </div>
 
-            <!-- شبكة المجموعة الأفقية: قائد المجموعة + 3 مرافقين جنباً إلى جنب -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-stretch">
-                <!-- خانة القائد (الأدمن - محاكي 1) -->
-                <div id="adminNodeCard" class="rounded-xl p-3.5 bg-black/40 border-2 border-white/10 flex flex-col justify-between transition-all">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-[11px] font-black text-[#e5cca3] flex items-center gap-1.5">
-                            <i class="fa-solid fa-crown text-[#d4b483]"></i> القائد (محاكي 1)
-                        </span>
-                        <span id="leaderStateBadge" class="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-slate-400 font-bold">
-                            في الانتظار
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-2.5">
-                        <div id="adminAvatarBox" class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-base text-slate-400 shrink-0">
-                            <i class="fa-solid fa-user-shield"></i>
+                <!-- هيكل الشجرة: كارت الأدمن في الأعلى + 3 كروت للمرافقين في الأسفل -->
+                <div class="flex flex-col items-center">
+                    <!-- كارت الأدمن الرئيسي (المحاكي 1) -->
+                    <div id="adminNodeCard" class="w-full max-w-lg rounded-2xl p-4 bg-slate-950/90 border-2 border-slate-800 transition-all duration-300">
+                        <div class="flex items-center justify-between mb-2.5">
+                            <span class="px-3 py-0.5 rounded-full text-[11px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1.5">
+                                <i class="fa-solid fa-crown text-amber-400"></i> الأدمن الرئيسي للمجموعة (محاكي 1)
+                            </span>
+                            <span id="leaderStateBadge" class="text-[11px] px-2.5 py-0.5 rounded-lg bg-slate-900 text-slate-400 font-bold">
+                                في انتظار القائد
+                            </span>
                         </div>
-                        <div class="min-w-0 flex-1">
-                            <div id="leaderNameDisplay" class="text-xs font-black text-white truncate">لا يوجد قائد نشط</div>
-                            <div onclick="copyLeaderId()" id="leaderIdDisplay" class="text-[11px] font-mono-code font-bold text-[#d4b483] mt-0.5 cursor-pointer hover:underline truncate" dir="ltr">Nusuk ID: -</div>
+                        <div class="flex items-center gap-3.5">
+                            <div id="adminAvatarBox" class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl text-slate-500 shrink-0">
+                                <i class="fa-solid fa-user-shield"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div id="leaderNameDisplay" class="text-base font-black text-white truncate">لا يوجد أدمن نشط حالياً</div>
+                                <div id="leaderIdDisplay" class="text-xs font-mono-code font-bold text-amber-400 mt-0.5" dir="ltr">Nusuk ID: -</div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- الـ 3 مرافقين (محاكي 2) -->
-                <div id="companionSlotsGrid" class="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <!-- يتم توليد خانات المرافقين الـ 3 هنا -->
-                </div>
-            </div>
-        </section>
+                    <!-- مسارات التوصيل المضيئة -->
+                    <div class="w-full max-w-xl flex flex-col items-center">
+                        <div id="mainTreeStem" class="w-0.5 h-5 bg-slate-800 transition-colors duration-500"></div>
+                        <div class="w-2/3 h-0.5 bg-slate-800 relative flex justify-between">
+                            <div id="branchLine1" class="w-0.5 h-4 bg-slate-800 -mt-0.5"></div>
+                            <div id="branchLine2" class="w-0.5 h-4 bg-slate-800 -mt-0.5"></div>
+                            <div id="branchLine3" class="w-0.5 h-4 bg-slate-800 -mt-0.5"></div>
+                        </div>
+                    </div>
 
-        <!-- ========================================================================= -->
-        <!-- 6. شريط المؤشرات والفلترة السريعة + شريط التحكم في الطابور -->
-        <!-- ========================================================================= -->
-        <section class="nusuk-panel p-4 rounded-2xl space-y-3.5">
-            <!-- الكروت الـ 6 السريعة (تعمل كفلاتر عند الضغط عليها) -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                <div onclick="setTableFilter('all')" id="kpiCard_all" class="kpi-card kpi-card-active p-3 rounded-xl bg-black/35 border border-white/10 cursor-pointer hover:border-white/25 transition flex items-center justify-between">
-                    <div>
-                        <p class="text-[11px] text-slate-400 font-bold">إجمالي الفوج</p>
-                        <p id="statTotal" class="text-xl font-black text-white font-mono-code mt-0.5">0</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-300 text-xs">
-                        <i class="fa-solid fa-users"></i>
-                    </div>
-                </div>
-
-                <div onclick="switchViewMode('groups')" class="p-3 rounded-xl bg-black/35 border border-[#d4b483]/25 cursor-pointer hover:border-[#d4b483] transition flex items-center justify-between">
-                    <div>
-                        <p class="text-[11px] text-[#e5cca3] font-bold">المجموعات الجاهزة</p>
-                        <p id="statGroupsCount" class="text-xl font-black text-[#d4b483] font-mono-code mt-0.5">0</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-lg bg-[#d4b483]/15 flex items-center justify-center text-[#d4b483] text-xs">
-                        <i class="fa-solid fa-id-card-clip"></i>
-                    </div>
-                </div>
-
-                <div onclick="setTableFilter('completed')" id="kpiCard_completed" class="kpi-card p-3 rounded-xl bg-black/35 border border-emerald-500/20 cursor-pointer hover:border-emerald-500/50 transition flex items-center justify-between">
-                    <div>
-                        <p class="text-[11px] text-emerald-300/90 font-bold">مؤهل (ينفع)</p>
-                        <p id="statSuccess" class="text-xl font-black text-emerald-400 font-mono-code mt-0.5">0</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-400 text-xs">
-                        <i class="fa-solid fa-check"></i>
-                    </div>
-                </div>
-
-                <div onclick="setTableFilter('ineligible')" id="kpiCard_ineligible" class="kpi-card p-3 rounded-xl bg-black/35 border border-rose-500/20 cursor-pointer hover:border-rose-500/50 transition flex items-center justify-between">
-                    <div>
-                        <p class="text-[11px] text-rose-300/90 font-bold">غير مؤهل (مينفعش)</p>
-                        <p id="statIneligible" class="text-xl font-black text-rose-400 font-mono-code mt-0.5">0</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-lg bg-rose-500/15 flex items-center justify-center text-rose-400 text-xs">
-                        <i class="fa-solid fa-ban"></i>
-                    </div>
-                </div>
-
-                <div onclick="setTableFilter('already_registered')" id="kpiCard_already_registered" class="kpi-card p-3 rounded-xl bg-black/35 border border-amber-500/20 cursor-pointer hover:border-amber-500/50 transition flex items-center justify-between">
-                    <div>
-                        <p class="text-[11px] text-amber-300/90 font-bold">مسجل مسبقاً</p>
-                        <p id="statAlready" class="text-xl font-black text-amber-400 font-mono-code mt-0.5">0</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-400 text-xs">
-                        <i class="fa-solid fa-clock-rotate-left"></i>
-                    </div>
-                </div>
-
-                <div onclick="setTableFilter('error')" id="kpiCard_error" class="kpi-card p-3 rounded-xl bg-black/35 border border-red-500/20 cursor-pointer hover:border-red-500/50 transition flex items-center justify-between">
-                    <div>
-                        <p class="text-[11px] text-red-300/90 font-bold">أخطاء / فشل</p>
-                        <p id="statError" class="text-xl font-black text-red-400 font-mono-code mt-0.5">0</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-lg bg-red-500/15 flex items-center justify-center text-red-400 text-xs">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    <!-- كروت الـ 3 مرافقين (المحاكي 2) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 w-full mt-3" id="companionSlotsGrid">
+                        <!-- يتم توليدها ديناميكياً -->
                     </div>
                 </div>
             </div>
 
-            <!-- أزرار التشغيل + الفلترة + البحث في سطر واحد منظم -->
-            <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
-                <!-- أزرار تشغيل الطابور -->
+            <!-- 🌟 2. شريط الإحصائيات السريعة للفوج الحالي (تعمل كفلاتر بالضغط عليها) 🌟 -->
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                <div onclick="setTableFilter('all')" class="studio-card p-3.5 rounded-2xl border-r-4 border-sky-500 cursor-pointer hover:scale-[1.02] transition">
+                    <p class="text-[11px] text-slate-400 font-bold">إجمالي الفوج</p>
+                    <p id="statTotal" class="text-2xl font-black text-white mt-0.5 font-mono-code">0</p>
+                </div>
+                <div onclick="switchViewMode('groups')" class="studio-card p-3.5 rounded-2xl border-r-4 border-amber-400 cursor-pointer hover:scale-[1.02] transition">
+                    <p class="text-[11px] text-amber-400 font-bold">مجموعات الفوج</p>
+                    <p id="statGroupsCount" class="text-2xl font-black text-amber-400 mt-0.5 font-mono-code">0</p>
+                </div>
+                <div onclick="setTableFilter('completed')" class="studio-card p-3.5 rounded-2xl border-r-4 border-emerald-500 cursor-pointer hover:scale-[1.02] transition">
+                    <p class="text-[11px] text-slate-400 font-bold">تم بنجاح (ينفع)</p>
+                    <p id="statSuccess" class="text-2xl font-black text-emerald-400 mt-0.5 font-mono-code">0</p>
+                </div>
+                <div onclick="setTableFilter('ineligible')" class="studio-card p-3.5 rounded-2xl border-r-4 border-rose-500 cursor-pointer hover:scale-[1.02] transition">
+                    <p class="text-[11px] text-rose-400 font-bold">غير مؤهل (مينفعش)</p>
+                    <p id="statIneligible" class="text-2xl font-black text-rose-400 mt-0.5 font-mono-code">0</p>
+                </div>
+                <div onclick="setTableFilter('already_registered')" class="studio-card p-3.5 rounded-2xl border-r-4 border-orange-500 cursor-pointer hover:scale-[1.02] transition">
+                    <p class="text-[11px] text-slate-400 font-bold">مسجل مسبقاً</p>
+                    <p id="statAlready" class="text-2xl font-black text-orange-400 mt-0.5 font-mono-code">0</p>
+                </div>
+                <div onclick="setTableFilter('error')" class="studio-card p-3.5 rounded-2xl border-r-4 border-red-500 cursor-pointer hover:scale-[1.02] transition">
+                    <p class="text-[11px] text-slate-400 font-bold">أخطاء / فشل</p>
+                    <p id="statError" class="text-2xl font-black text-red-400 mt-0.5 font-mono-code">0</p>
+                </div>
+            </div>
+
+            <!-- 🌟 3. شريط التحكم في الطابور + البحث + تبديل العرض 🌟 -->
+            <div class="studio-card p-4 rounded-2xl flex flex-wrap justify-between items-center gap-3">
                 <div class="flex items-center gap-2 flex-wrap">
-                    <button id="btnStartQueue" onclick="startQueueProcessing()" class="px-4 py-2 rounded-xl btn-nusuk-emerald font-extrabold text-xs flex items-center gap-2 shadow">
-                        <i class="fa-solid fa-play"></i> تشغيل الفوج الحالي
+                    <button id="btnStartQueue" onclick="startQueueProcessing()" class="px-4 py-2.5 rounded-xl emerald-gradient-btn font-extrabold text-xs flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-play"></i> تشغيل الفوج الحالي فقط
                     </button>
-                    <button id="btnStartAllScheduled" onclick="startAllScheduledBatches()" class="px-3.5 py-2 rounded-xl btn-nusuk-sand font-black text-xs flex items-center gap-2 shadow">
-                        <i class="fa-solid fa-list-ol"></i> تشغيل كل الأفواج
+                    <button id="btnStartAllScheduled" onclick="startAllScheduledBatches()" class="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-list-ol"></i> تشغيل كل الأفواج بالتتابع
                     </button>
-                    <button id="btnStopQueue" onclick="stopQueueProcessing()" disabled class="px-3.5 py-2 rounded-xl bg-red-500/20 text-red-300 border border-red-500/30 font-bold text-xs transition flex items-center gap-1.5 disabled:opacity-40">
-                        <i class="fa-solid fa-pause"></i> إيقاف مؤقت
+                    <button id="btnStopQueue" onclick="stopQueueProcessing()" disabled class="px-3.5 py-2.5 rounded-xl bg-red-600/25 text-red-400 border border-red-500/30 font-bold text-xs transition flex items-center gap-1.5 disabled:opacity-40">
+                        <i class="fa-solid fa-pause"></i> إيقاف
                     </button>
                 </div>
 
-                <!-- البحث الفوري + التبديل بين الجدول والكروت -->
-                <div class="flex items-center gap-2 flex-wrap flex-1 justify-end">
-                    <div class="sleek-input-wrap w-full sm:w-64">
-                        <input id="pilgrimSearchInput" type="text" placeholder="بحث بالاسم، الجواز، التأشيرة، ID..." oninput="renderPilgrimsTable()" class="sleek-input py-1.5 text-xs">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <!-- بحث سريع -->
+                    <div class="sleek-input-wrap w-48">
+                        <input id="pilgrimSearchInput" type="text" placeholder="بحث بالجواز أو الاسم..." oninput="renderPilgrimsTable()" class="sleek-input py-1.5 text-xs">
                         <i class="fa-solid fa-magnifying-glass sleek-input-icon text-xs"></i>
                     </div>
 
-                    <div class="bg-black/50 p-1 rounded-xl border border-white/10 flex items-center text-xs font-bold">
-                        <button id="tabTableBtn" onclick="switchViewMode('table')" class="px-3 py-1.5 rounded-lg btn-nusuk-sand font-black transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-table-list"></i> الجدول
+                    <!-- محول العرض (جدول / كروت المجموعات) -->
+                    <div class="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center text-xs font-bold">
+                        <button id="tabTableBtn" onclick="switchViewMode('table')" class="px-3 py-1.5 rounded-lg primary-gradient-btn font-extrabold transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-list-check"></i> الجدول
                         </button>
                         <button id="tabGroupsBtn" onclick="switchViewMode('groups')" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-grip"></i> الكروت (<span id="groupsCountBadge">0</span>)
+                            <i class="fa-solid fa-id-card-clip"></i> الكروت (<span id="groupsCountBadge">0</span>)
                         </button>
                     </div>
 
-                    <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl btn-nusuk-outline text-xs font-bold flex items-center gap-1.5" title="تصفير كل الأخطاء وغير المؤهلين لإعادة المحاولة">
-                        <i class="fa-solid fa-rotate-right text-[#d4b483]"></i> تصفير الأخطاء
+                    <button onclick="retryFailedPilgrims()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold transition flex items-center gap-1.5" title="تصفير كل الأخطاء وغير المؤهلين دفعة واحدة">
+                        <i class="fa-solid fa-rotate-right text-amber-400"></i> تصفير الأخطاء
                     </button>
-                    <button onclick="clearPilgrimList()" class="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 text-xs font-bold transition" title="مسح قائمة الفوج الحالي">
+                    <button onclick="clearPilgrimList()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-red-950/60 text-red-400 border border-slate-800 text-xs font-bold transition" title="مسح قائمة الفوج الحالي">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
             </div>
-        </section>
 
-        <!-- ========================================================================= -->
-        <!-- 7.أ: جدول المعتمرين بكامل عرض الشاشة (Full-Width Pilgrims Table) -->
-        <!-- ========================================================================= -->
-        <section id="tableViewContainer" class="nusuk-panel rounded-2xl overflow-hidden">
-            <div class="overflow-x-auto max-h-[620px]">
-                <table class="w-full text-right text-sm">
-                    <thead class="bg-[#050a0c] text-slate-400 text-xs sticky top-0 z-10 border-b border-white/10">
-                        <tr>
-                            <th class="py-3.5 px-4 w-12">#</th>
-                            <th class="py-3.5 px-4">اسم المعتمر / رقم الجواز</th>
-                            <th class="py-3.5 px-4">رقم التأشيرة</th>
-                            <th class="py-3.5 px-4">الدور والمجموعة العائلية</th>
-                            <th class="py-3.5 px-4">معرّف نُسُك (Nusuk ID)</th>
-                            <th class="py-3.5 px-4">الحالة وتفاصيل تصريح الروضة</th>
-                            <th class="py-3.5 px-4 text-center">إجراءات التحكم</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pilgrimsTableBody" class="divide-y divide-white/5">
-                        <!-- يتم الملء بالجافاسكريبت -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ========================================================================= -->
-        <!-- 7.ب: عرض كروت المجموعات العائلية الجاهزة للطباعة -->
-        <!-- ========================================================================= -->
-        <section id="groupsViewContainer" class="hidden space-y-4">
-            <div class="flex flex-wrap justify-between items-center gap-3 nusuk-panel-sand rounded-2xl p-4">
-                <div class="text-xs text-[#e5cca3] font-bold flex items-center gap-2.5">
-                    <i class="fa-solid fa-circle-check text-teal-400 text-base"></i>
-                    <span>بطاقات المجموعات العائلية جاهزة للطباعة المباشرة (تحتوي على اسم القائد وأسماء المرافقين).</span>
+            <!-- 🌟 4.أ: عرض الجدول التفصيلي 🌟 -->
+            <div id="tableViewContainer" class="studio-card rounded-2xl overflow-hidden">
+                <div class="overflow-x-auto max-h-[560px]">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-slate-950 text-slate-400 text-xs uppercase sticky top-0 z-10 border-b border-slate-800">
+                            <tr>
+                                <th class="py-3.5 px-3">#</th>
+                                <th class="py-3.5 px-3">المعتمر / رقم الجواز</th>
+                                <th class="py-3.5 px-3">رقم التأشيرة</th>
+                                <th class="py-3.5 px-3">الدور والمجموعة العائلية</th>
+                                <th class="py-3.5 px-3">Nusuk ID</th>
+                                <th class="py-3.5 px-3">الحالة والسبب المفصل للروضة</th>
+                                <th class="py-3.5 px-3 text-center">إجراءات الفرد</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pilgrimsTableBody" class="divide-y divide-slate-800/70">
+                            <!-- يتم الملء بالجافاسكريبت -->
+                        </tbody>
+                    </table>
                 </div>
-                <button onclick="printGroupsToPDF()" class="px-4 py-2 rounded-xl btn-nusuk-sand text-xs font-black flex items-center gap-2 shadow">
-                    <i class="fa-solid fa-print"></i> طباعة الكروت PDF الآن
-                </button>
             </div>
 
-            <div id="groupsCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- يتم توليد الكروت هنا -->
-            </div>
-        </section>
-
-    </div>
-
-    <!-- ========================================================================= -->
-    <!-- نافذة فحص صحة المحاكيات (Health Check Modal) -->
-    <!-- ========================================================================= -->
-    <div id="healthModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="nusuk-panel-sand max-w-lg w-full rounded-2xl p-6 space-y-4">
-            <div class="flex items-center justify-between pb-3 border-b border-white/10">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                        <i class="fa-solid fa-heart-pulse"></i>
+            <!-- 🌟 4.ب: عرض بطاقات المجموعات الجاهزة للطباعة 🌟 -->
+            <div id="groupsViewContainer" class="hidden space-y-4">
+                <div class="flex justify-between items-center bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5">
+                    <div class="text-xs text-amber-300 font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info text-amber-400 text-base"></i>
+                        <span>كروت المجموعات جاهزة للطباعة بتصميم نظيف يعرض اسم الأدمن كعنوان وتحته أسماء المرافقين فقط.</span>
                     </div>
-                    <div>
-                        <h3 class="text-base font-black text-white">تقرير حالة المحاكيات</h3>
-                        <p class="text-[11px] text-slate-400">الاتصال المباشر وحالة تطبيق نُسُك</p>
-                    </div>
+                    <button onclick="printGroupsToPDF()" class="px-4 py-2 rounded-xl primary-gradient-btn text-xs font-black flex items-center gap-2 shrink-0 shadow">
+                        <i class="fa-solid fa-print"></i> طباعة الكروت PDF الآن
+                    </button>
                 </div>
-                <button onclick="closeHealthModal()" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div id="healthModalBody" class="space-y-3 text-xs"></div>
-            <div class="pt-2 flex justify-end">
-                <button onclick="closeHealthModal()" class="px-5 py-2 rounded-xl btn-nusuk-sand text-xs font-black">إغلاق</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- إشعار منبثق (Toast) -->
-    <div id="copyToast" class="fixed bottom-5 left-5 hidden bg-teal-700 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2.5 z-50 border border-white/15">
-        <i class="fa-solid fa-circle-check text-sm"></i>
+                <div id="groupsCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[540px] overflow-y-auto pr-1">
+                    <!-- يتم توليد الكروت هنا -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Toast إشعار -->
+    <div id="copyToast" class="fixed bottom-5 left-5 hidden bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 z-50">
+        <i class="fa-solid fa-circle-check"></i>
         <span id="copyToastText">تم النسخ بنجاح!</span>
     </div>
 
@@ -715,16 +723,30 @@
         let currentTableFilter = "all";
         let lastServerState = {};
 
-        function toggleDrawer(drawerId) {
-            const target = document.getElementById(drawerId);
-            const otherId = drawerId === "settingsDrawer" ? "uploadDrawer" : "settingsDrawer";
-            const other = document.getElementById(otherId);
-            if (other && !other.classList.contains("hidden")) {
-                other.classList.add("hidden");
-            }
-            if (target) {
-                target.classList.toggle("hidden");
-            }
+        // 🌟 نظام تغيير الثيم الفوري 🌟
+        function setAppTheme(themeName) {
+            document.documentElement.setAttribute("data-theme", themeName);
+            localStorage.setItem("nusuk_ui_theme", themeName);
+            ["royal", "cyber", "light"].forEach(t => {
+                const btn = document.getElementById(`themeBtn_${t}`);
+                if (!btn) return;
+                if (t === themeName) {
+                    btn.className = "px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-extrabold transition";
+                } else {
+                    btn.className = "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition";
+                }
+            });
+        }
+
+        function loadSavedTheme() {
+            const saved = localStorage.getItem("nusuk_ui_theme") || "royal";
+            setAppTheme(saved);
+        }
+
+        function setTableFilter(filterKey) {
+            currentTableFilter = filterKey;
+            if (currentViewMode !== "table") switchViewMode("table");
+            renderPilgrimsTable();
         }
 
         function playTone(freq = 660, duration = 0.15) {
@@ -745,22 +767,10 @@
 
         function showToast(msg, isError = false) {
             const toast = document.getElementById("copyToast");
-            toast.className = `fixed bottom-5 left-5 ${isError ? 'bg-red-600' : 'bg-teal-700'} text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2.5 z-50 border border-white/15`;
+            toast.className = `fixed bottom-5 left-5 ${isError ? 'bg-red-600' : 'bg-emerald-600'} text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 z-50`;
             document.getElementById("copyToastText").textContent = msg;
             toast.classList.remove("hidden");
-            setTimeout(() => toast.classList.add("hidden"), 3200);
-        }
-
-        async function updateServerSpeed(val) {
-            try {
-                const res = await fetch(`${API_BASE}/api/set-speed?multiplier=${val}`, { method: "POST" });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`تم ضبط سرعة التنفيذ إلى ${data.speed_multiplier}x`);
-                }
-            } catch (e) {
-                showToast("تعذر تحديث السرعة - تأكد من تشغيل السيرفر", true);
-            }
+            setTimeout(() => toast.classList.add("hidden"), 3000);
         }
 
         async function manualRandomizeEmulator(emuKey) {
@@ -771,7 +781,7 @@
             const btn = document.getElementById(btnId);
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري...`;
             showToast(`جاري تغيير الـ ID وإعادة تشغيل ${label}...`);
 
             try {
@@ -802,7 +812,6 @@
             p.nusukId = "-";
             p.reason = "";
             p.eligible = null;
-            p.screenshot = null;
             saveBatchesToStorage();
             renderPilgrimsTable();
             showToast(`تم تصفير حالة الفرد رقم #${idx + 1} وإعادته لقائمة الانتظار`);
@@ -812,7 +821,6 @@
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
             if (!clientEmail || !clientPass) {
-                toggleDrawer("settingsDrawer");
                 alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات أولاً!");
                 return;
             }
@@ -862,7 +870,6 @@
         function handlePilgrimResult(p, data) {
             p.eligible = data.eligible !== undefined ? data.eligible : null;
             p.reason = data.reason || "";
-            p.screenshot = data.screenshot || null;
 
             if (data.status === "busy") {
                 p.status = "pending";
@@ -909,9 +916,6 @@
             }
         }
 
-        // ==========================================
-        // إدارة الأفواج والجدولة المتتالية
-        // ==========================================
         function initBatchesFromStorage() {
             try {
                 const savedBatches = JSON.parse(localStorage.getItem("nusuk_batches_v6") || "null");
@@ -960,9 +964,6 @@
             b.clientPass = document.getElementById("clientPass").value.trim();
             b.natText = document.getElementById("natText").value.trim() || "مصر";
             b.natOption = document.getElementById("natOption").value || "2";
-            document.getElementById("activeBatchHeaderTag").textContent = b.name;
-            const summaryBadge = document.getElementById("headerSummaryNatBadge");
-            if (summaryBadge) summaryBadge.textContent = b.natText;
             saveBatchesToStorage();
         }
 
@@ -980,8 +981,6 @@
             highlightActiveNatButton(b.natText || "مصر", b.natOption || "2");
 
             document.getElementById("activeBatchHeaderTag").textContent = b.name || `الفوج #${idx + 1}`;
-            const summaryBadge = document.getElementById("headerSummaryNatBadge");
-            if (summaryBadge) summaryBadge.textContent = b.natText || "مصر";
 
             renderBatchesList();
             renderPilgrimsTable();
@@ -1028,17 +1027,29 @@
                 const pending = (b.pilgrims || []).filter(p => p.status === "pending").length;
                 const isCurrent = idx === activeBatchIndex;
 
-                let countLabel = `${done}/${total}`;
-                if (total > 0 && pending === 0) countLabel = `✓ ${total}`;
+                let stateBadge = `<span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">فارغ</span>`;
+                if (total > 0 && pending === 0) {
+                    stateBadge = `<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">مكتمل (${done}/${total}) ✓</span>`;
+                } else if (total > 0) {
+                    stateBadge = `<span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">${done}/${total} مسجل</span>`;
+                }
 
                 return `
-                    <div onclick="selectBatch(${idx})" class="px-3.5 py-2 rounded-xl bg-black/40 border border-white/10 cursor-pointer transition flex items-center gap-2.5 shrink-0 ${isCurrent ? 'batch-tab-active' : 'hover:border-white/25 text-slate-300'}">
-                        <span class="w-5 h-5 rounded-lg ${isCurrent ? 'bg-[#d4b483] text-slate-950' : 'bg-white/10 text-slate-400'} text-[11px] font-black flex items-center justify-center">
-                            ${idx + 1}
-                        </span>
-                        <span class="text-xs font-extrabold truncate max-w-[150px]">${b.name}</span>
-                        <span class="text-[10px] px-2 py-0.5 rounded-md bg-black/50 text-[#e5cca3] font-mono-code font-bold">${countLabel}</span>
-                        <button onclick="deleteBatch(${idx}, event)" class="text-slate-500 hover:text-red-400 transition text-xs mr-0.5" title="حذف الفوج">
+                    <div onclick="selectBatch(${idx})" class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 cursor-pointer transition flex items-center justify-between gap-2 ${isCurrent ? 'batch-item-active' : 'hover:border-slate-700'}">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-5 h-5 rounded-full ${isCurrent ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400'} text-[11px] font-black flex items-center justify-center shrink-0">
+                                    ${idx + 1}
+                                </span>
+                                <span class="text-xs font-extrabold text-white truncate">${b.name}</span>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1 pr-6 text-[10px] text-slate-400">
+                                <span>🌍 ${b.natText || "مصر"}</span>
+                                <span>•</span>
+                                ${stateBadge}
+                            </div>
+                        </div>
+                        <button onclick="deleteBatch(${idx}, event)" class="p-1.5 text-slate-500 hover:text-red-400 transition text-xs">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
@@ -1046,25 +1057,29 @@
             }).join("");
         }
 
+        function switchSideInputMode(mode) {
+            const excelPanel = document.getElementById("sideExcelPanel");
+            const manualPanel = document.getElementById("sideManualPanel");
+            const btnExcel = document.getElementById("sideTabExcel");
+            const btnManual = document.getElementById("sideTabManual");
+
+            if (mode === "excel") {
+                excelPanel.classList.remove("hidden");
+                manualPanel.classList.add("hidden");
+                btnExcel.className = "py-1.5 rounded-lg bg-sky-500 text-slate-950 font-extrabold transition flex items-center justify-center gap-1.5";
+                btnManual.className = "py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5";
+            } else {
+                excelPanel.classList.add("hidden");
+                manualPanel.classList.remove("hidden");
+                btnManual.className = "py-1.5 rounded-lg bg-sky-500 text-slate-950 font-extrabold transition flex items-center justify-center gap-1.5";
+                btnExcel.className = "py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5";
+            }
+        }
+
         function copyText(txt, label = "النص") {
             if (!txt || txt === "-") return;
             navigator.clipboard.writeText(txt);
             showToast(`تم نسخ ${label}: ${txt}`);
-        }
-
-        function copyLeaderId() {
-            if (lastServerState && lastServerState.leader_id) {
-                copyText(lastServerState.leader_id, "Nusuk ID للقائد");
-            }
-        }
-
-        function setTableFilter(filterKey) {
-            currentTableFilter = filterKey;
-            document.querySelectorAll(".kpi-card").forEach(el => el.classList.remove("kpi-card-active"));
-            const targetCard = document.getElementById(`kpiCard_${filterKey}`);
-            if (targetCard) targetCard.classList.add("kpi-card-active");
-            if (currentViewMode !== "table") switchViewMode("table");
-            renderPilgrimsTable();
         }
 
         function switchViewMode(mode) {
@@ -1077,12 +1092,12 @@
             if (mode === "table") {
                 tableCont.classList.remove("hidden");
                 groupsCont.classList.add("hidden");
-                btnTable.className = "px-3 py-1.5 rounded-lg btn-nusuk-sand font-black transition flex items-center gap-1.5";
+                btnTable.className = "px-3 py-1.5 rounded-lg primary-gradient-btn font-extrabold transition flex items-center gap-1.5";
                 btnGroups.className = "px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1.5";
             } else {
                 tableCont.classList.add("hidden");
                 groupsCont.classList.remove("hidden");
-                btnGroups.className = "px-3 py-1.5 rounded-lg btn-nusuk-sand font-black transition flex items-center gap-1.5";
+                btnGroups.className = "px-3 py-1.5 rounded-lg primary-gradient-btn font-extrabold transition flex items-center gap-1.5";
                 btnTable.className = "px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1.5";
                 renderCompletedGroupsCards();
             }
@@ -1093,70 +1108,77 @@
             const adminAvatar = document.getElementById("adminAvatarBox");
             const leaderStateBadge = document.getElementById("leaderStateBadge");
             const closeBtn = document.getElementById("btnForceCloseGroup");
+            const mainStem = document.getElementById("mainTreeStem");
             const slotsGrid = document.getElementById("companionSlotsGrid");
 
             const isLeaderActive = Boolean(data.leader_active);
             const comps = data.companions || [];
 
             if (isLeaderActive) {
-                adminCard.className = "rounded-xl p-3.5 border-2 admin-node-active flex flex-col justify-between transition-all";
-                adminAvatar.className = "w-10 h-10 rounded-xl btn-nusuk-sand flex items-center justify-center text-base text-slate-950 shrink-0";
+                adminCard.className = "w-full max-w-lg rounded-2xl p-4 bg-slate-950/95 border-2 admin-node-active transition-all duration-300";
+                adminAvatar.className = "w-12 h-12 rounded-2xl primary-gradient-btn flex items-center justify-center text-xl shadow-lg shrink-0";
                 adminAvatar.innerHTML = `<i class="fa-solid fa-crown"></i>`;
-                leaderStateBadge.textContent = `نشط (${comps.length}/3 مرافقين)`;
-                leaderStateBadge.className = "text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-extrabold";
-                document.getElementById("leaderNameDisplay").textContent = data.leader_name || "القائد الرئيسي";
-                document.getElementById("leaderIdDisplay").textContent = `ID: ${data.leader_id || "-"}`;
+                leaderStateBadge.textContent = "أدمن نشط (ينتظر المرافقين)";
+                leaderStateBadge.className = "text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-extrabold";
+                document.getElementById("leaderNameDisplay").textContent = data.leader_name || "الأدمن الرئيسي";
+                document.getElementById("leaderIdDisplay").textContent = `Nusuk ID: ${data.leader_id || "-"}`;
                 closeBtn.classList.remove("hidden");
+                mainStem.className = "w-0.5 h-5 bg-amber-500";
             } else {
-                adminCard.className = "rounded-xl p-3.5 bg-black/40 border-2 border-white/10 slot-waiting-pulse flex flex-col justify-between transition-all";
-                adminAvatar.className = "w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-base text-teal-400 shrink-0";
+                adminCard.className = "w-full max-w-lg rounded-2xl p-4 bg-slate-950/70 border-2 border-slate-800 slot-waiting-pulse transition-all duration-300";
+                adminAvatar.className = "w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl text-sky-400 shrink-0";
                 adminAvatar.innerHTML = `<i class="fa-solid fa-user-plus"></i>`;
-                leaderStateBadge.textContent = "الدور القادم: قائد جديد";
-                leaderStateBadge.className = "text-[10px] px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30 font-bold";
-                document.getElementById("leaderNameDisplay").textContent = "في انتظار تسجيل قائد المجموعة...";
-                document.getElementById("leaderIdDisplay").textContent = "المحاكي 1 (Index 21)";
+                leaderStateBadge.textContent = "الدور القادم: تسجيل أدمن جديد";
+                leaderStateBadge.className = "text-[11px] px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/40 font-bold";
+                document.getElementById("leaderNameDisplay").textContent = "في انتظار تسجيل أدمن المجموعة الجديدة...";
+                document.getElementById("leaderIdDisplay").textContent = "سيتم فتح المجموعة على المحاكي 1 (Index 21)";
                 closeBtn.classList.add("hidden");
+                mainStem.className = "w-0.5 h-5 bg-slate-800";
             }
 
             let slotsHtml = "";
             for (let i = 0; i < 3; i++) {
                 const comp = comps[i];
+                const branchEl = document.getElementById(`branchLine${i + 1}`);
                 const isNextSlot = isLeaderActive && comps.length === i;
 
                 if (comp) {
+                    if (branchEl) branchEl.className = "w-0.5 h-4 bg-emerald-500 -mt-0.5";
                     slotsHtml += `
-                        <div class="rounded-xl p-3.5 border comp-node-active flex flex-col justify-between">
+                        <div class="rounded-2xl p-3.5 bg-slate-950/90 border comp-node-active flex flex-col justify-between">
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-[11px] font-extrabold text-emerald-400 flex items-center gap-1">
                                     <i class="fa-solid fa-circle-check"></i> مرافق ${i + 1}
                                 </span>
-                                <span class="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold">تم الربط ✓</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">تم الربط ✓</span>
                             </div>
                             <div class="text-xs font-black text-white truncate">${comp.name}</div>
-                            <div onclick="copyText('${comp.id}', 'Nusuk ID')" class="text-[11px] font-mono-code text-[#e5cca3] mt-1 cursor-pointer hover:underline" dir="ltr">ID: ${comp.id}</div>
+                            <div onclick="copyText('${comp.id}', 'Nusuk ID')" class="text-[11px] font-mono-code text-amber-400 mt-1 cursor-pointer hover:underline" dir="ltr">ID: ${comp.id}</div>
                         </div>
                     `;
                 } else if (isNextSlot) {
+                    if (branchEl) branchEl.className = "w-0.5 h-4 bg-sky-400 -mt-0.5";
                     slotsHtml += `
-                        <div class="rounded-xl p-3.5 border-2 slot-waiting-pulse flex flex-col justify-between">
+                        <div class="rounded-2xl p-3.5 bg-slate-950/60 border-2 slot-waiting-pulse flex flex-col justify-between">
                             <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-[11px] font-extrabold text-teal-300 flex items-center gap-1">
+                                <span class="text-[11px] font-extrabold text-sky-400 flex items-center gap-1">
                                     <i class="fa-solid fa-spinner fa-spin"></i> مرافق ${i + 1}
                                 </span>
-                                <span class="text-[10px] px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-bold">الدور القادم</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 font-bold">الدور القادم</span>
                             </div>
-                            <div class="text-xs font-bold text-slate-300">جاهز للربط بالقائد تلقائياً</div>
-                            <div class="text-[10px] text-slate-500 mt-1">المحاكي 2 (Index 20)</div>
+                            <div class="text-xs font-bold text-slate-300">سيتم ربطه بالأدمن تلقائياً</div>
+                            <div class="text-[10px] text-slate-500 mt-1">على المحاكي 2 (Index 20)</div>
                         </div>
                     `;
                 } else {
+                    if (branchEl) branchEl.className = "w-0.5 h-4 bg-slate-800 -mt-0.5";
                     slotsHtml += `
-                        <div class="rounded-xl p-3.5 bg-black/25 border border-white/5 opacity-55 flex flex-col justify-between">
+                        <div class="rounded-2xl p-3.5 bg-slate-950/40 border border-slate-800/80 opacity-55 flex flex-col justify-between">
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-[11px] font-bold text-slate-500">
                                     <i class="fa-regular fa-user"></i> مرافق ${i + 1}
                                 </span>
-                                <span class="text-[10px] text-slate-600">فارغ</span>
+                                <span class="text-[10px] text-slate-600">خانة فارغة</span>
                             </div>
                             <div class="text-xs text-slate-500">في الانتظار...</div>
                             <div class="text-[10px] font-mono-code text-slate-600 mt-1">ID: -</div>
@@ -1181,82 +1203,48 @@
                     lastServerState = data;
 
                     const isHealthy = (!data.health || (data.health.emu1?.ok && data.health.emu2?.ok));
-                    dot.className = isHealthy ? "w-2 h-2 rounded-full bg-emerald-400" : "w-2 h-2 rounded-full bg-amber-400 animate-ping";
-                    txt.textContent = data.busy ? "جاري التنفيذ..." : (isHealthy ? "متصل" : "تنبيه بالمحاكي");
-                    txt.className = isHealthy ? "text-emerald-400 text-[11px]" : "text-amber-300 text-[11px]";
-                    badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-950/50 border border-emerald-500/35 text-xs font-bold";
+                    dot.className = isHealthy ? "w-2.5 h-2.5 rounded-full bg-emerald-400" : "w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping";
+                    txt.textContent = data.busy ? "مشغول بالتنفيذ..." : (isHealthy ? "متصل وجاهز" : "تنبيه بالمحاكي");
+                    txt.className = isHealthy ? "text-emerald-400" : "text-amber-400";
+                    badge.className = "flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold";
 
                     if (data.emu1_counter !== undefined) emu1Txt.textContent = `${data.emu1_counter}/5`;
                     if (data.emu2_counter !== undefined) emu2Txt.textContent = `${data.emu2_counter}/5`;
 
-                    if (data.speed_multiplier && document.activeElement !== document.getElementById("speedMultSelect")) {
-                        document.getElementById("speedMultSelect").value = String(data.speed_multiplier);
-                    }
-
                     const nextBadge = document.getElementById("nextTargetBadge");
                     if (data.next_target) {
-                        nextBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-teal-400 animate-ping"></span><span>الوجهة القادمة: ${data.next_target}</span>`;
+                        nextBadge.textContent = `الوجهة القادمة: ${data.next_target}`;
                     }
 
                     updateLiveGroupTree(data);
                     return;
                 }
             } catch (e) {}
-            dot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
+            dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
             txt.textContent = "السيرفر متوقف";
-            txt.className = "text-red-400 text-[11px]";
-            badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/45 border border-red-500/30 text-xs font-bold";
-        }
-
-        function closeHealthModal() {
-            const m = document.getElementById("healthModal");
-            m.classList.add("hidden");
-            m.classList.remove("flex");
+            txt.className = "text-red-400";
+            badge.className = "flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold";
         }
 
         async function checkEmulatorsHealth() {
-            const modal = document.getElementById("healthModal");
-            const body = document.getElementById("healthModalBody");
-            modal.classList.remove("hidden");
-            modal.classList.add("flex");
-            body.innerHTML = `
-                <div class="py-8 text-center text-slate-300 space-y-2">
-                    <i class="fa-solid fa-spinner fa-spin text-2xl text-teal-400"></i>
-                    <p class="font-bold">جاري فحص اتصال المحاكيات وحالة تطبيق نسك...</p>
-                </div>
-            `;
-
             try {
                 const res = await fetch(`${API_BASE}/api/health`);
                 const data = await res.json();
                 if (data.busy) {
-                    body.innerHTML = `<div class="p-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">المحاكيات مشغولة بتنفيذ عملية حالياً، انتظر حتى تنتهي.</div>`;
+                    alert("المحاكيات مشغولة بتنفيذ عملية حالياً، انتظر حتى تنتهي.");
                     return;
                 }
                 const e1 = data.emulators?.emu1 || {};
                 const e2 = data.emulators?.emu2 || {};
-
-                const renderEmuCard = (e, icon) => `
-                    <div class="p-4 rounded-xl bg-black/40 border border-white/10 space-y-2">
-                        <div class="flex items-center justify-between">
-                            <span class="font-black text-sm text-white flex items-center gap-2">
-                                <i class="fa-solid ${icon} text-[#d4b483]"></i> ${e.label || "محاكي"}
-                            </span>
-                            <span class="px-2.5 py-0.5 rounded-md text-[11px] font-bold ${e.connected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}">
-                                ${e.connected ? "متصل ✓" : "غير متصل ✕"}
-                            </span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-2 pt-1 text-[11px] text-slate-400">
-                            <div class="bg-black/40 p-2 rounded-lg">السيريال: <span class="text-white font-mono-code block mt-0.5">${e.serial || "-"}</span></div>
-                            <div class="bg-black/40 p-2 rounded-lg">الأبعاد: <span class="text-white font-mono-code block mt-0.5">${e.screen || "-"}</span></div>
-                            <div class="bg-black/40 p-2 rounded-lg">نسك بالواجهة: <span class="${e.nusuk_in_foreground ? 'text-emerald-400' : 'text-amber-400'} font-bold block mt-0.5">${e.nusuk_in_foreground ? "نعم (نشط)" : "لا"}</span></div>
-                        </div>
-                    </div>
-                `;
-
-                body.innerHTML = renderEmuCard(e1, "fa-crown") + renderEmuCard(e2, "fa-users");
+                const msg = [
+                    `حالة المحاكيات: ${data.ok ? "✅ سليمة وجاهزة" : "⚠️ يوجد تنبيه"}`,
+                    `-------------------------`,
+                    `👑 المحاكي 1 (${e1.serial}): ${e1.connected ? "متصل" : "غير متصل"} | الشاشة: ${e1.screen || "-"} | نسك بالواجهة: ${e1.nusuk_in_foreground ? "نعم" : "لا"}`,
+                    `👥 المحاكي 2 (${e2.serial}): ${e2.connected ? "متصل" : "غير متصل"} | الشاشة: ${e2.screen || "-"} | نسك بالواجهة: ${e2.nusuk_in_foreground ? "نعم" : "لا"}`
+                ].join("\n");
+                alert(msg);
             } catch (e) {
-                body.innerHTML = `<div class="p-4 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 font-bold">تعذر الاتصال بالسيرفر المحلي لفحص المحاكيات.</div>`;
+                alert("تعذر الاتصال بالسيرفر لفحص المحاكيات.");
             }
         }
 
@@ -1347,7 +1335,7 @@
         function renderSavedProfiles() {
             const select = document.getElementById("savedProfilesSelect");
             const profiles = getSavedProfiles();
-            select.innerHTML = `<option value="">-- اختر مكتباً محفوظاً (${profiles.length}) --</option>`;
+            select.innerHTML = `<option value="">-- اختر مكتب / إيميل محفوظ (${profiles.length}) --</option>`;
             profiles.forEach((p, idx) => {
                 const opt = document.createElement("option");
                 opt.value = idx;
@@ -1387,7 +1375,6 @@
                 document.getElementById("clientPass").value = p.pass;
                 saveActiveCredentials();
                 syncCurrentBatchSettings();
-                showToast(`تم تحميل بيانات: ${p.name}`);
             }
         }
 
@@ -1482,7 +1469,6 @@
             }
 
             event.target.value = "";
-            document.getElementById("uploadDrawer").classList.add("hidden");
             showToast(`تم إدراج ${files.length} ملف بنجاح في الجدولة!`);
         }
 
@@ -1517,7 +1503,6 @@
             document.getElementById("manualEmail").value = "";
             saveBatchesToStorage();
             renderPilgrimsTable();
-            showToast("تمت إضافة المعتمر للفوج الحالي");
         }
 
         function togglePilgrimForcedRole(idx) {
@@ -1559,7 +1544,7 @@
                     if (!currentGroup) {
                         currentGroup = {
                             groupNumber: groups.length + 1,
-                            leader: { cleanName: p.parentLeader || "قائد المجموعة", passport: "-", visa: "-", nusukId: "-", email: "-" },
+                            leader: { cleanName: p.parentLeader || "أدمن المجموعة", passport: "-", visa: "-", nusukId: "-", email: "-" },
                             companions: []
                         };
                         groups.push(currentGroup);
@@ -1579,10 +1564,10 @@
 
             if (groups.length === 0) {
                 container.innerHTML = `
-                    <div class="col-span-3 nusuk-panel p-12 rounded-2xl text-center text-slate-400">
-                        <i class="fa-solid fa-users-viewfinder text-4xl text-[#d4b483]/40 mb-3 block"></i>
+                    <div class="col-span-2 studio-card p-12 rounded-2xl text-center text-slate-400">
+                        <i class="fa-solid fa-users-viewfinder text-4xl text-amber-400/40 mb-3 block"></i>
                         <p class="text-sm font-bold text-slate-300">لا توجد مجموعات مكتملة للعرض حالياً في هذا الفوج</p>
-                        <p class="text-xs text-slate-500 mt-1">ابدأ تشغيل الفوج لتظهر هنا الكروت العائلية جاهزة للطباعة.</p>
+                        <p class="text-xs text-slate-500 mt-1">ابدأ تشغيل الطابور لتظهر هنا الكروت العائلية جاهزة للطباعة.</p>
                     </div>
                 `;
                 return;
@@ -1590,34 +1575,34 @@
 
             container.innerHTML = groups.map(g => {
                 return `
-                    <div class="nusuk-panel-sand rounded-2xl p-5 flex flex-col justify-between">
+                    <div class="studio-card-highlight rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden">
                         <div>
-                            <div class="flex items-center justify-between pb-3 mb-3.5 border-b border-white/10">
+                            <div class="flex items-center justify-between pb-3 mb-3.5 border-b border-slate-800">
                                 <div class="flex items-center gap-2">
-                                    <span class="px-3 py-1 rounded-lg btn-nusuk-sand font-black text-xs flex items-center gap-1.5">
+                                    <span class="px-3 py-1 rounded-xl primary-gradient-btn font-black text-xs flex items-center gap-1.5 shadow">
                                         <i class="fa-solid fa-crown"></i> مجموعة #${g.groupNumber}
                                     </span>
                                     <span class="text-xs text-slate-400 font-bold">(${1 + g.companions.length} أفراد)</span>
                                 </div>
-                                <span class="text-xs px-2.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                                <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold">
                                     ${g.companions.length} / 3 مرافقين
                                 </span>
                             </div>
 
-                            <div class="p-3.5 rounded-xl bg-[#d4b483]/10 border border-[#d4b483]/30 mb-3.5">
-                                <span class="text-[10px] text-[#e5cca3] font-extrabold block mb-0.5">👑 القائد الرئيسي للمجموعة:</span>
-                                <span class="text-sm font-black text-white">${g.leader.cleanName}</span>
+                            <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 mb-3.5">
+                                <span class="text-[10px] text-amber-400 font-extrabold block mb-0.5">👑 الأدمن الرئيسي (القائد):</span>
+                                <span class="text-base font-black text-white">${g.leader.cleanName}</span>
                             </div>
 
-                            <div class="space-y-2 pr-3 border-r-2 border-teal-500/50 mr-1">
+                            <div class="space-y-2 pr-3 border-r-2 border-emerald-500/50 mr-1.5">
                                 ${g.companions.length > 0 ? g.companions.map((c, ci) => `
-                                    <div class="p-2.5 rounded-xl bg-black/40 border border-white/5 flex items-center gap-2.5">
-                                        <span class="w-6 h-6 rounded-full bg-teal-500/20 text-teal-300 text-xs font-black flex items-center justify-center shrink-0">
+                                    <div class="p-2.5 rounded-xl bg-slate-950/85 border border-slate-800/90 flex items-center gap-2.5">
+                                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center justify-center shrink-0">
                                             ${ci + 1}
                                         </span>
-                                        <span class="text-xs font-bold text-white truncate">${c.cleanName}</span>
+                                        <span class="text-xs font-extrabold text-white truncate">${c.cleanName}</span>
                                     </div>
-                                `).join("") : `<div class="text-xs text-slate-500 py-2">لا يوجد مرافقون مرتبطون بهذا القائد بعد.</div>`}
+                                `).join("") : `<div class="text-xs text-slate-500 py-2">لا يوجد مرافقون مرتبطون بهذا الأدمن بعد.</div>`}
                             </div>
                         </div>
                     </div>
@@ -1643,7 +1628,7 @@
                             <span class="group-num">مجموعة #${g.groupNumber}</span>
                             <span class="members-badge">${1 + g.companions.length} أفراد</span>
                         </div>
-                        <div class="leader-label">👑 القائد الرئيسي للمجموعة</div>
+                        <div class="leader-label">👑 الأدمن الرئيسي (القائد)</div>
                         <div class="leader-name">${g.leader.cleanName}</div>
                     </div>
 
@@ -1684,7 +1669,7 @@
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
-                            border-bottom: 3px solid #0d9488;
+                            border-bottom: 3px solid #d97706;
                             padding-bottom: 14px;
                             margin-bottom: 24px;
                         }
@@ -1702,14 +1687,15 @@
                             overflow: hidden;
                             page-break-inside: avoid;
                             break-inside: avoid;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
                             display: flex;
                             flex-direction: column;
                         }
                         .card-leader-header {
-                            background: linear-gradient(135deg, #0c191c 0%, #132a2f 100%);
+                            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
                             color: #ffffff;
                             padding: 14px 16px;
-                            border-bottom: 3px solid #d4b483;
+                            border-bottom: 3px solid #f59e0b;
                         }
                         .badge-row {
                             display: flex;
@@ -1718,15 +1704,15 @@
                             margin-bottom: 8px;
                         }
                         .group-num {
-                            background: #d4b483;
-                            color: #0c191c;
+                            background: #f59e0b;
+                            color: #0f172a;
                             font-size: 11px;
                             font-weight: 900;
                             padding: 2px 10px;
                             border-radius: 20px;
                         }
                         .members-badge { font-size: 11px; color: #cbd5e1; font-weight: 700; }
-                        .leader-label { font-size: 11px; color: #e5cca3; font-weight: 700; margin-bottom: 2px; }
+                        .leader-label { font-size: 11px; color: #fbbf24; font-weight: 700; margin-bottom: 2px; }
                         .leader-name { font-size: 15px; font-weight: 900; color: #ffffff; line-height: 1.4; }
                         .companions-body { padding: 14px 16px; background: #ffffff; flex: 1; }
                         .comp-section-title { font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 10px; }
@@ -1737,14 +1723,14 @@
                             gap: 10px;
                             background: #f8fafc;
                             border: 1px solid #e2e8f0;
-                            border-right: 4px solid #0d9488;
+                            border-right: 4px solid #10b981;
                             padding: 8px 12px;
                             border-radius: 10px;
                         }
                         .comp-index {
                             width: 22px;
                             height: 22px;
-                            background: #0d9488;
+                            background: #10b981;
                             color: #ffffff;
                             font-size: 12px;
                             font-weight: 900;
@@ -1765,14 +1751,14 @@
                 </head>
                 <body>
                     <div class="no-print" style="margin-bottom: 20px; text-align: center;">
-                        <button onclick="window.print()" style="background: #0d9488; color:#ffffff; border:none; padding:10px 28px; border-radius:12px; font-family:'Cairo'; font-weight:900; cursor:pointer; font-size:15px;">
+                        <button onclick="window.print()" style="background: linear-gradient(135deg, #f59e0b, #d97706); color:#0f172a; border:none; padding:10px 28px; border-radius:12px; font-family:'Cairo'; font-weight:900; cursor:pointer; font-size:15px;">
                             🖨️ طباعة / حفظ الكروت كـ PDF
                         </button>
                     </div>
 
                     <div class="top-bar">
                         <div>
-                            <h1>كروت توزيع مجموعات نُسُك</h1>
+                            <h1>كروت توزيع مجموعات نسك</h1>
                             <p>${officeName} — إجمالي المجموعات: (${groups.length}) مجموعة</p>
                         </div>
                         <div style="text-align: left;">
@@ -1796,22 +1782,11 @@
         function renderPilgrimsTable() {
             const tbody = document.getElementById("pilgrimsTableBody");
 
-            const totalCount = pilgrimsList.length;
-            const successCount = pilgrimsList.filter(p => p.status === "completed").length;
-            const ineligibleCount = pilgrimsList.filter(p => p.status === "ineligible").length;
-            const alreadyCount = pilgrimsList.filter(p => p.status === "already_registered").length;
-            const errorCount = pilgrimsList.filter(p => p.status === "error").length;
-            const finishedCount = successCount + ineligibleCount + alreadyCount;
-
-            document.getElementById("statTotal").textContent = totalCount;
-            document.getElementById("statSuccess").textContent = successCount;
-            document.getElementById("statIneligible").textContent = ineligibleCount;
-            document.getElementById("statAlready").textContent = alreadyCount;
-            document.getElementById("statError").textContent = errorCount;
-
-            const pct = totalCount > 0 ? Math.round((finishedCount / totalCount) * 100) : 0;
-            document.getElementById("batchProgressPercent").textContent = `${pct}%`;
-            document.getElementById("batchProgressBar").style.width = `${pct}%`;
+            document.getElementById("statTotal").textContent = pilgrimsList.length;
+            document.getElementById("statSuccess").textContent = pilgrimsList.filter(p => p.status === "completed").length;
+            document.getElementById("statIneligible").textContent = pilgrimsList.filter(p => p.status === "ineligible").length;
+            document.getElementById("statAlready").textContent = pilgrimsList.filter(p => p.status === "already_registered").length;
+            document.getElementById("statError").textContent = pilgrimsList.filter(p => p.status === "error").length;
 
             const groups = buildGroupsFromList();
             document.getElementById("groupsCountBadge").textContent = groups.length;
@@ -1819,22 +1794,14 @@
             if (currentViewMode === "groups") renderCompletedGroupsCards();
 
             if (pilgrimsList.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="py-16 text-center text-slate-400">
-                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-teal-500/40 mb-3 block"></i>
-                            <span class="font-bold text-sm text-slate-300 block">الفوج الحالي فارغ</span>
-                            <span class="text-xs text-slate-500 mt-1 block">اضغط على زر "رفع شيت Excel / إضافة معتمر" في الأعلى للبدء</span>
-                        </td>
-                    </tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="py-14 text-center text-slate-500 text-xs">لا توجد بيانات في هذا الفوج.. ارفع شيت الإكسل أو أضف معتمراً يدوياً للبدء</td></tr>`;
                 return;
             }
 
             const searchQuery = (document.getElementById("pilgrimSearchInput")?.value || "").trim().toLowerCase();
             let activeLeaderName = "";
-            let visibleRows = 0;
 
-            const rowsHtml = pilgrimsList.map((p, idx) => {
+            tbody.innerHTML = pilgrimsList.map((p, idx) => {
                 const isLeader = p.roleType === "leader" || (p.roleInfo && p.roleInfo.includes("رئيسي"));
                 const isCompanion = p.roleType === "companion" || (p.roleInfo && p.roleInfo.includes("مرافق"));
                 const cleanName = getCleanPilgrimName(p);
@@ -1846,96 +1813,87 @@
                     const hay = `${cleanName} ${p.passport} ${p.visa} ${p.nusukId} ${p.message} ${p.reason}`.toLowerCase();
                     if (!hay.includes(searchQuery)) return "";
                 }
-                visibleRows++;
 
-                let rowClass = "hover:bg-white/[0.03] transition";
-                let roleBadgeHtml = `<span class="text-slate-500 text-xs">تلقائي</span>`;
+                let rowClass = "hover:bg-slate-900/40 transition";
+                let roleBadgeHtml = `<span class="text-slate-500 text-xs">تلقائي (حسب الدور)</span>`;
 
                 if (isLeader) {
-                    rowClass = "bg-[#d4b483]/[0.07] hover:bg-[#d4b483]/[0.12] border-r-4 border-r-[#d4b483] transition";
+                    rowClass = "bg-amber-500/10 hover:bg-amber-500/15 border-r-4 border-r-amber-400 transition";
                     roleBadgeHtml = `
-                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#d4b483]/20 text-[#e5cca3] border border-[#d4b483]/35 text-xs font-black">
-                            <i class="fa-solid fa-crown text-[#d4b483]"></i>
-                            <span>قائد المجموعة (${cleanName})</span>
+                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-black">
+                            <i class="fa-solid fa-crown text-amber-400"></i>
+                            <span>أدمن رئيسي (${cleanName})</span>
                         </div>
                     `;
                 } else if (isCompanion) {
-                    rowClass = "bg-teal-950/20 hover:bg-teal-950/35 border-r-4 border-r-teal-500/60 transition";
-                    const linkedTo = p.parentLeader || activeLeaderName || "القائد الحالي";
+                    rowClass = "bg-emerald-950/15 hover:bg-emerald-950/25 border-r-4 border-r-emerald-500/60 transition";
+                    const linkedTo = p.parentLeader || activeLeaderName || "الأدمن الحالي";
                     roleBadgeHtml = `
-                        <div class="pr-2">
-                            <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-300 border border-teal-500/30 text-xs font-bold">
+                        <div class="pr-3">
+                            <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold">
                                 <span>↳ ${p.roleInfo}</span>
                             </div>
                             <div class="text-[11px] text-slate-400 mt-0.5">
-                                تابع لـ: <span class="text-[#e5cca3] font-bold">${linkedTo}</span>
+                                تابع للأدمن: <span class="text-amber-400 font-bold">${linkedTo}</span>
                             </div>
                         </div>
                     `;
                 } else if (p.forceRole === "leader") {
-                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded-md bg-[#d4b483]/20 text-[#e5cca3] border border-[#d4b483]/40 text-[11px] font-bold">👑 مجدول كقائد جديد</span>`;
+                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[11px] font-bold">👑 مجدول كأدمن مجموعة جديدة</span>`;
                 } else if (p.forceRole === "companion") {
-                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/40 text-[11px] font-bold">👥 مجدول كمرافق</span>`;
+                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/40 text-[11px] font-bold">👥 مجدول كمرافق</span>`;
                 } else if (p.status === "ineligible") {
                     rowClass = "bg-rose-950/15 hover:bg-rose-950/25 border-r-4 border-r-rose-500 transition";
-                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-bold">❌ غير مؤهل للروضة</span>`;
+                    roleBadgeHtml = `<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[11px] font-bold">❌ غير مؤهل (مينفعش)</span>`;
                 } else if (p.status === "already_registered") {
-                    roleBadgeHtml = `<span class="text-amber-400/90 text-xs font-bold">مسجل مسبقاً</span>`;
+                    roleBadgeHtml = `<span class="text-orange-400 text-xs font-bold">مسجل مسبقاً (في انتظار الاسترجاع)</span>`;
                 }
 
-                let statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-black/40 text-slate-400 text-xs border border-white/5">في الانتظار</span>`;
+                let statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-400 text-xs border border-slate-800">في الانتظار</span>`;
                 if (p.status === "processing") {
-                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> ${p.message || "جاري التنفيذ..."}</span>`;
+                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs animate-pulse"><i class="fa-solid fa-spinner fa-spin ml-1"></i> ${p.message || "جاري التنفيذ..."}</span>`;
                 } else if (p.status === "completed") {
-                    statusBadge = `<span title="${p.message || ''}" class="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold"><i class="fa-solid fa-check-double ml-1"></i> ${p.message || "مؤهل وتم بنجاح ✓"}</span>`;
+                    statusBadge = `<span title="${p.message || ''}" class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold"><i class="fa-solid fa-check-double ml-1"></i> ${p.message || "مؤهل وتم بنجاح ✓"}</span>`;
                 } else if (p.status === "ineligible") {
-                    statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-300 border border-rose-500/35 text-xs font-bold block max-w-md truncate"><i class="fa-solid fa-ban ml-1"></i> ${p.message}</span>`;
+                    statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-bold block max-w-xs truncate"><i class="fa-solid fa-ban ml-1"></i> ${p.message}</span>`;
                 } else if (p.status === "already_registered") {
-                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation ml-1"></i> مسجل مسبقاً</span>`;
+                    statusBadge = `<span class="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation ml-1"></i> مسجل مسبقاً</span>`;
                 } else if (p.status === "error") {
                     let shortErr = (p.message && p.message.includes("UiObjectNotFound")) ? "فشل (خطأ واجهة)" : (p.message || "فشل");
-                    statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 text-xs font-bold"><i class="fa-solid fa-xmark ml-1"></i> ${shortErr}</span>`;
+                    statusBadge = `<span title="${p.message}" class="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold"><i class="fa-solid fa-xmark ml-1"></i> ${shortErr}</span>`;
                 }
 
                 const clearBtnClass = (p.status === "error" || p.status === "ineligible")
-                    ? "bg-[#d4b483] text-slate-950 hover:bg-[#e5cca3] font-bold"
-                    : "bg-white/5 hover:bg-[#d4b483] text-[#e5cca3] hover:text-slate-950";
-
-                const shotBtn = p.screenshot
-                    ? `<a href="${API_BASE}${p.screenshot}" target="_blank" title="عرض لقطة شاشة الخطأ" class="p-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition text-xs"><i class="fa-solid fa-camera"></i></a>`
-                    : "";
+                    ? "bg-orange-500 text-slate-950 hover:bg-orange-400 shadow font-bold"
+                    : "bg-slate-800 hover:bg-orange-500 text-orange-400 hover:text-slate-950";
 
                 return `
                     <tr class="${rowClass}">
-                        <td class="py-3 px-4 font-mono-code font-bold text-slate-400 text-xs">${idx + 1}</td>
-                        <td class="py-3 px-4">
+                        <td class="py-3 px-3 font-bold text-slate-400">${idx + 1}</td>
+                        <td class="py-3 px-3">
                             ${cleanName !== "معتمر" ? `<div class="text-xs font-extrabold text-white mb-0.5">${cleanName}</div>` : ""}
-                            <div onclick="copyText('${p.passport}', 'رقم الجواز')" class="font-mono-code text-xs text-[#e5cca3] cursor-pointer hover:underline inline-flex items-center gap-1.5" dir="ltr">
-                                <span>${p.passport}</span>
-                                <i class="fa-regular fa-copy text-[10px] opacity-60"></i>
-                            </div>
+                            <div onclick="copyText('${p.passport}', 'رقم الجواز')" class="font-mono-code text-xs text-amber-400 cursor-pointer hover:underline" dir="ltr">${p.passport}</div>
                         </td>
-                        <td onclick="copyText('${p.visa}', 'رقم التأشيرة')" class="py-3 px-4 font-mono-code text-xs text-slate-300 cursor-pointer hover:text-white" dir="ltr">${p.visa}</td>
-                        <td class="py-3 px-4">${roleBadgeHtml}</td>
-                        <td onclick="copyText('${p.nusukId}', 'Nusuk ID')" class="py-3 px-4 font-mono-code text-xs font-bold text-teal-400 cursor-pointer hover:underline" dir="ltr">${p.nusukId || "-"}</td>
-                        <td class="py-3 px-4">${statusBadge}</td>
-                        <td class="py-3 px-4 text-center">
-                            <div class="flex items-center justify-center gap-1.5">
-                                ${shotBtn}
-                                <button onclick="recoverSinglePilgrimManual(${idx})" title="استرجاع الحساب وفحص تصاريح الروضة فوراً" class="p-1.5 rounded-lg bg-teal-500/15 hover:bg-teal-500 text-teal-300 hover:text-slate-950 transition text-xs">
+                        <td class="py-3 px-3 font-mono-code text-xs text-slate-300" dir="ltr">${p.visa}</td>
+                        <td class="py-3 px-3">${roleBadgeHtml}</td>
+                        <td onclick="copyText('${p.nusukId}', 'Nusuk ID')" class="py-3 px-3 font-mono-code text-xs font-bold text-emerald-400 cursor-pointer hover:underline" dir="ltr">${p.nusukId || "-"}</td>
+                        <td class="py-3 px-3">${statusBadge}</td>
+                        <td class="py-3 px-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="recoverSinglePilgrimManual(${idx})" title="استرجاع الحساب وفحص تصاريح الروضة فوراً" class="p-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500 text-sky-400 hover:text-slate-950 transition text-xs">
                                     <i class="fa-solid fa-clock-rotate-left"></i>
                                 </button>
-                                <button onclick="clearSinglePilgrimStatus(${idx})" title="تصفير حالة هذا الفرد وإعادته للانتظار" class="px-2 py-1.5 rounded-lg ${clearBtnClass} transition text-xs flex items-center gap-1">
+                                <button onclick="clearSinglePilgrimStatus(${idx})" title="تصفير حالة الفشل لهذا الفرد فقط وإعادته للانتظار" class="px-2 py-1.5 rounded-lg ${clearBtnClass} transition text-xs flex items-center gap-1">
                                     <i class="fa-solid fa-rotate-left"></i>
                                     ${(p.status === "error" || p.status === "ineligible") ? '<span class="text-[10px]">تصفير</span>' : ''}
                                 </button>
-                                <button onclick="togglePilgrimForcedRole(${idx})" title="تحديد الدور يدوياً (تلقائي / قائد جديد / مرافق)" class="p-1.5 rounded-lg bg-white/5 hover:bg-[#d4b483] text-[#e5cca3] hover:text-slate-950 transition text-xs">
+                                <button onclick="togglePilgrimForcedRole(${idx})" title="تحديد الدور (تلقائي / بدء مجموعة جديدة كأدمن / مرافق)" class="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-400 hover:text-slate-950 transition text-xs">
                                     <i class="fa-solid fa-crown"></i>
                                 </button>
-                                <button onclick="processSinglePilgrim(${idx})" title="تشغيل هذا المعتمر الآن" class="p-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 transition text-xs">
+                                <button onclick="processSinglePilgrim(${idx})" title="تشغيل هذا المعتمر الآن" class="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white transition text-xs">
                                     <i class="fa-solid fa-play"></i>
                                 </button>
-                                <button onclick="removePilgrim(${idx})" title="حذف من القائمة" class="p-1.5 rounded-lg bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white transition text-xs">
+                                <button onclick="removePilgrim(${idx})" title="حذف من القائمة" class="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition text-xs">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
@@ -1943,10 +1901,6 @@
                     </tr>
                 `;
             }).join("");
-
-            tbody.innerHTML = visibleRows > 0
-                ? rowsHtml
-                : `<tr><td colspan="7" class="py-12 text-center text-slate-500 text-xs">لا توجد نتائج مطابقة للفلتر أو البحث الحالي</td></tr>`;
         }
 
         function removePilgrim(idx) {
@@ -1969,7 +1923,6 @@
                     p.message = "في الانتظار";
                     p.eligible = null;
                     p.reason = "";
-                    p.screenshot = null;
                 }
             });
             saveBatchesToStorage();
@@ -1981,7 +1934,6 @@
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
             if (!clientEmail || !clientPass) {
-                toggleDrawer("settingsDrawer");
                 alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات أولاً!");
                 return false;
             }
@@ -2047,7 +1999,6 @@
             const clientEmail = document.getElementById("clientEmail").value.trim();
             const clientPass = document.getElementById("clientPass").value.trim();
             if (!clientEmail || !clientPass) {
-                toggleDrawer("settingsDrawer");
                 alert("يرجى إدخال إيميل العميل وكلمة مرور التطبيقات أولاً!");
                 return;
             }
@@ -2166,7 +2117,7 @@
                     "أحقية الروضة": eligibilityText,
                     "سبب / تفاصيل تصريح الروضة": p.reason || p.message || "-",
                     "الدور في المجموعة": p.roleInfo || "غير محدد",
-                    "تابع للأدمن (القائد)": isLeader ? "هو القائد الرئيسي 👑" : (isCompanion ? (p.parentLeader || currentLeaderName) : "-"),
+                    "تابع للأدمن (القائد)": isLeader ? "هو الأدمن الرئيسي 👑" : (isCompanion ? (p.parentLeader || currentLeaderName) : "-"),
                     "Nusuk ID": (p.nusukId && p.nusukId !== "-") ? String(p.nusukId) : "-",
                     "حالة التسجيل في نسك": cleanStatus,
                     "البريد الإلكتروني": p.email || clientEmail || "-"
@@ -2191,6 +2142,7 @@
         }
 
         window.addEventListener("DOMContentLoaded", () => {
+            loadSavedTheme();
             renderSavedProfiles();
             loadNatSettings();
             initBatchesFromStorage();
