@@ -22,6 +22,82 @@ try:
 except ImportError:
     pass
 
+def _ensure_runtime_dependencies():
+    import glob
+    import sys
+
+    try:
+        import uiautomator2  # noqa: F401
+        import fastapi  # noqa: F401
+        import uvicorn  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    if os.environ.get("NUSUK_REEXEC") != "1":
+        home = os.path.expanduser("~")
+        patterns = [
+            os.path.join(home, "AppData", "Local", "Programs", "Python", "Python*", "python.exe"),
+            os.path.join(home, "Desktop", "*", "Scripts", "python.exe"),
+            os.path.join(home, "*", "Scripts", "python.exe"),
+            os.path.join(home, "*venv*", "Scripts", "python.exe"),
+            os.path.join(home, "anaconda3", "python.exe"),
+            os.path.join(home, "miniconda3", "python.exe"),
+            r"C:\Python*\python.exe",
+            r"C:\Program Files\Python*\python.exe",
+        ]
+        seen = {os.path.normcase(os.path.abspath(sys.executable))}
+        for pat in patterns:
+            for cand in glob.glob(pat):
+                norm = os.path.normcase(os.path.abspath(cand))
+                if norm in seen or not os.path.isfile(cand):
+                    continue
+                seen.add(norm)
+                try:
+                    chk = subprocess.run(
+                        [cand, "-c", "import uiautomator2, fastapi, uvicorn"],
+                        capture_output=True,
+                        timeout=6,
+                    )
+                    if chk.returncode == 0:
+                        print(f"[✓] تحويل التشغيل تلقائياً إلى بيئة البايثون المكتملة: {cand}")
+                        env = os.environ.copy()
+                        env["NUSUK_REEXEC"] = "1"
+                        raise SystemExit(subprocess.call([cand, os.path.abspath(__file__), *sys.argv[1:]], env=env))
+                except SystemExit:
+                    raise
+                except Exception:
+                    pass
+
+    print("[⏳] جاري تثبيت المكتبات المطلوبة للسيرفر (uiautomator2, fastapi, uvicorn) لأول مرة...")
+    pacman_exe = r"C:\msys64\usr\bin\pacman.exe"
+    if "msys64" in sys.executable.lower() and os.path.isfile(pacman_exe):
+        subprocess.run(
+            [
+                pacman_exe,
+                "-S",
+                "--noconfirm",
+                "--needed",
+                "mingw-w64-ucrt-x86_64-python-pip",
+                "mingw-w64-ucrt-x86_64-python-fastapi",
+                "mingw-w64-ucrt-x86_64-python-uvicorn",
+                "mingw-w64-ucrt-x86_64-python-pydantic",
+                "mingw-w64-ucrt-x86_64-python-pillow",
+                "mingw-w64-ucrt-x86_64-python-lxml",
+                "mingw-w64-ucrt-x86_64-python-requests",
+            ]
+        )
+    else:
+        subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True)
+
+    pkgs = ["uiautomator2", "fastapi", "uvicorn", "pydantic"]
+    res = subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages", *pkgs])
+    if res.returncode != 0:
+        subprocess.run([sys.executable, "-m", "pip", "install", *pkgs])
+
+
+_ensure_runtime_dependencies()
+
 import uiautomator2 as u2
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
