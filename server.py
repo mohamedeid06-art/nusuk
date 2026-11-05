@@ -231,7 +231,9 @@ def get_device(serial: str, timeout: int = 120):
 
 
 def smart_sleep(base_seconds: float, mult: float = 1.0):
-    time.sleep(max(0.1, base_seconds * mult))
+    with _state_lock:
+        live_mult = float(STATE.get("speed_multiplier", mult) or mult)
+    time.sleep(max(0.08, base_seconds * live_mult))
 
 
 def wait_for_network_loading(dev, max_wait: float = 12.0) -> bool:
@@ -1568,13 +1570,13 @@ def get_status():
     }
 
 
-@app.post("/api/set-speed")
+@app.api_route("/api/set-speed", methods=["POST", "GET"])
 def set_speed_api(multiplier: float = 1.0):
-    mult = max(0.8, min(3.0, float(multiplier)))
+    mult = max(0.5, min(3.0, float(multiplier)))
     with _state_lock:
         STATE["speed_multiplier"] = mult
     save_state()
-    log.info(f"تم تغيير معامل سرعة الانتظار إلى: {mult}x")
+    log.info(f"⚡ تم تغيير معامل سرعة المحرك إلى: {mult}x")
     return {"success": True, "speed_multiplier": mult}
 
 
