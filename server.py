@@ -165,8 +165,9 @@ LOGIN_MARKERS = [
 ]
 CREATE_MARKERS = ["أنشئ حسابًا جديدًا", "أنشئ حسابك", "Create", "Sign up", "Register"]
 ALREADY_KEYS = [
-    "مسجل مسبق", "مسجل بالفعل", "موجود مسبق", "مسجلة مسبق",
-    "لديك حساب", "already registered", "already exists", "account already",
+    "مسجل", "مسجّل", "مسبق", "مسبقا", "مسبقاً", "مسبقًا",
+    "استعد حسابك", "باسم حساب آخر",
+    "already", "registered", "exists", "found",
 ]
 SUCCESS_KEYS = ["exploring", "استكشاف", "نجاح"]
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
@@ -1326,8 +1327,12 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
 
     # 1. الانتقال لشاشة استعد حسابك
     dump = dev.dump_hierarchy()
-    if "استعد حسابك" in dump:
-        click_text_in_xml(dev, dump, ("استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1800)
+    if "تسجيل الحساب من جديد" in dump or "كافة الزوار" in dump or "زائر دولي" in dump:
+        log.info(f"[{label}] نافذة (تسجيل الحساب من جديد) مفتوحة بالفعل بعد الضغط على الزر الأسود.")
+    elif "استعد حسابك" in dump:
+        if not click_text_in_xml(dev, dump, ("سجّل الخروج واستعد حسابك", "استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1800):
+            dev.click(540, 1711)
+        smart_sleep(1.8, mult)
     elif "لديك مشكلة" in dump:
         click_text_in_xml(dev, dump, ("لديك مشكلة",), min_y=600, max_y=1200)
         smart_sleep(1.0, mult)
@@ -2010,12 +2015,11 @@ def _run_register(req: RegisterRequest) -> dict:
                 time.sleep(0.5)
 
         if outcome == "already":
-            log.warning("الحساب مسجل مسبقاً! بدء مسار استرجاع الحساب وفحص التصاريح تلقائياً...")
-            dev.click(540, 1711)
-            smart_sleep(1.0, mult)
-            dev.click(540, 300)
-            smart_sleep(0.7, mult)
-            force_clean_login_state(dev, emu_key)
+            log.warning("الحساب مسجل مسبقاً! الضغط على الزر الأسود (سجّل الخروج واستعد حسابك) وبدء الاسترجاع...")
+            if not click_text_in_xml(dev, dev.dump_hierarchy(), ("سجّل الخروج واستعد حسابك", "استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1800):
+                dev.click(540, 1711)
+            smart_sleep(1.8, mult)
+            wait_for_network_loading(dev, max_wait=8.0)
             return run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
 
         # 10. Continue Exploring ثم سهم الرجوع للبروفايل
