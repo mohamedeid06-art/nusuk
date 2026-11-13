@@ -200,7 +200,7 @@ _state_lock = threading.RLock()
 
 
 def _default_group() -> dict:
-    return {"leader_active": False, "leader_name": None, "leader_id": None, "companions": []}
+    return {"leader_active": False, "leader_name": None, "leader_id": None, "leader_email": None, "companions": []}
 
 
 def _default_state() -> dict:
@@ -1512,6 +1512,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
             "reason": reason,
             "pilgrim_name": pname,
             "nusuk_id": nid,
+            "used_email": email_val,
             "details": details,
             "message": reason,
         }
@@ -1526,6 +1527,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
                 "leader_active": True,
                 "leader_name": pname,
                 "leader_id": nid,
+                "leader_email": email_val,
                 "companions": [],
             }
         save_state()
@@ -1537,6 +1539,8 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
             "reason": reason,
             "leader_name": pname,
             "leader_id": nid,
+            "leader_email": email_val,
+            "used_email": email_val,
             "details": details,
             "message": f"تم استرجاع الحساب واعتماده كرئيسي بنجاح ({reason})",
         }
@@ -1584,6 +1588,8 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         "reason": reason,
         "companion_name": pname,
         "companion_id": nid,
+        "used_email": email_val,
+        "leader_email": (STATE.get("group") or {}).get("leader_email") or req.client_email.strip(),
         "group_count": group_count,
         "details": details,
         "message": f"تم استرجاع الحساب وربطه كمرافق {comp_num} بنجاح ({reason})",
@@ -1641,6 +1647,7 @@ def get_status():
         "leader_active": group["leader_active"],
         "leader_name": group["leader_name"],
         "leader_id": group["leader_id"],
+        "leader_email": group.get("leader_email"),
         "companions": group["companions"],
         "companions_count": len(group["companions"]),
         "max_companions": MAX_COMPANIONS,
@@ -2043,7 +2050,7 @@ def _run_register(req: RegisterRequest) -> dict:
             with _state_lock:
                 STATE["group"] = {
                     "leader_active": True, "leader_name": leader_name,
-                    "leader_id": leader_id, "companions": [],
+                    "leader_id": leader_id, "leader_email": email_val, "companions": [],
                 }
             save_state()
 
@@ -2052,6 +2059,7 @@ def _run_register(req: RegisterRequest) -> dict:
             return {
                 "success": True, "status": "leader_registered", "role": "leader",
                 "leader_name": leader_name, "leader_id": leader_id,
+                "leader_email": email_val, "used_email": email_val,
                 "message": "تم تسجيل الحساب الرئيسي بنجاح",
             }
 
@@ -2108,6 +2116,8 @@ def _run_register(req: RegisterRequest) -> dict:
         return {
             "success": True, "status": "companion_linked", "role": "companion",
             "companion_name": comp_name, "companion_id": comp_id,
+            "used_email": email_val,
+            "leader_email": (STATE.get("group") or {}).get("leader_email") or req.client_email.strip(),
             "group_count": group_count,
             "message": f"تم ربط المرافق {comp_num} وقبول الطلب بنجاح",
         }
