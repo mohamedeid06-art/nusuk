@@ -280,7 +280,95 @@ def exclusive(wait: float = 0.0):
 
 
 class FlowError(Exception):
-    pass
+    def __init__(self, message: str, screenshot: Optional[str] = None):
+        super().__init__(message)
+        self.screenshot = screenshot
+
+
+SCREEN_ERROR_MARKERS = (
+    "حدث خطأ",
+    "حدث خطا",
+    "خطأ غير متوقع",
+    "حصل خطأ",
+    "something went wrong",
+    "an error occurred",
+    "unexpected error",
+)
+
+
+def extract_screen_error_details(xml_str: str) -> Optional[str]:
+    low = xml_str.lower()
+    if not any(m in low for m in SCREEN_ERROR_MARKERS):
+        return None
+    try:
+        root = ET.fromstring(xml_str.encode("utf-8"))
+        texts = []
+        for node in root.iter():
+            if node.attrib.get("class") == "android.widget.EditText":
+                continue
+            t = (node.attrib.get("text") or "").strip()
+            if t and t not in texts and len(t) <= 180:
+                texts.append(t)
+        err_parts = [
+            t for t in texts
+            if any(k in t.lower() for k in ("خطأ", "خطا", "تعذر", "فشل", "غير صحيح", "غير صالح", "حاول", "error", "wrong", "invalid", "failed"))
+        ]
+        if err_parts:
+            return " — ".join(err_parts[:3])
+    except Exception:
+        pass
+    return "حدث خطأ في التطبيق"
+
+
+def _install_error_screenshot_hook(dev):
+    if getattr(dev, "_error_hook_installed", False):
+        return dev
+    orig_dump = dev.dump_hierarchy
+
+    def wrapped_dump(*args, **kwargs):
+        xml_str = orig_dump(*args, **kwargs)
+        try:
+            if isinstance(xml_str, str):
+                err_txt = extract_screen_error_details(xml_str)
+                if err_txt:
+                    now_t = time.time()
+                    last_t = getattr(dev, "_last_error_shot_time", 0.0)
+                    if now_t - last_t > 2.5 or not getattr(dev, "_last_captured_error_shot", None):
+                        shot = save_failure_artifacts(dev, "hadath_khata", xml_str=xml_str)
+                        dev._last_error_shot_time = now_t
+                        dev._last_captured_error_shot = shot
+                        dev._last_captured_error_text = err_txt
+                        log.warning(f"📸 [لقطة فورية] تم رصد ({err_txt}) على الشاشة والتقاط اسكرين شوت فوراً: {shot}")
+        except Exception:
+            pass
+        return xml_str
+
+    dev._orig_dump_hierarchy = orig_dump
+    dev.dump_hierarchy = wrapped_dump
+    dev._error_hook_installed = True
+    dev._last_captured_error_shot = None
+    dev._last_captured_error_text = None
+    dev._last_error_shot_time = 0.0
+    return dev
+
+
+def reset_device_error_capture(dev):
+    if dev is not None:
+        dev._last_captured_error_shot = None
+        dev._last_captured_error_text = None
+
+
+def raise_if_screen_has_error(dev, xml_str: Optional[str] = None):
+    if dev is None:
+        return
+    raw = xml_str if xml_str is not None else dev.dump_hierarchy()
+    low = raw.lower()
+    if any(k in low for k in ALREADY_KEYS):
+        return
+    if any(m in low for m in SCREEN_ERROR_MARKERS):
+        err_msg = getattr(dev, "_last_captured_error_text", None) or extract_screen_error_details(raw) or "حدث خطأ في التطبيق"
+        shot = getattr(dev, "_last_captured_error_shot", None) or save_failure_artifacts(dev, "hadath_khata", xml_str=raw)
+        raise FlowError(err_msg, screenshot=shot)
 
 
 _devices_cache = {}
@@ -290,7 +378,7 @@ def get_device(serial: str, timeout: int = 120):
     if serial in _devices_cache:
         try:
             if _devices_cache[serial].info.get("screenOn") is not None:
-                return _devices_cache[serial]
+                return _install_error_screenshot_hook(_devices_cache[serial])
         except Exception:
             _devices_cache.pop(serial, None)
 
@@ -299,6 +387,7 @@ def get_device(serial: str, timeout: int = 120):
         try:
             dev = u2.connect(serial)
             if dev.info.get("screenOn") is not None:
+                dev = _install_error_screenshot_hook(dev)
                 _devices_cache[serial] = dev
                 return dev
         except Exception:
@@ -313,12 +402,14 @@ def smart_sleep(base_seconds: float, mult: float = 1.0):
     time.sleep(max(0.08, base_seconds * live_mult))
 
 
-def wait_for_network_loading(dev, max_wait: float = 12.0) -> bool:
+def wait_for_network_loading(dev, max_wait: float = 12.0, check_error: bool = False) -> bool:
     start_t = time.time()
     time.sleep(0.25)
     while time.time() - start_t < max_wait:
         try:
             xml_str = dev.dump_hierarchy()
+            if check_error:
+                raise_if_screen_has_error(dev, xml_str)
             is_loading = (
                 "ProgressBar" in xml_str
                 or "جاري التحميل" in xml_str
@@ -328,6 +419,8 @@ def wait_for_network_loading(dev, max_wait: float = 12.0) -> bool:
             )
             if not is_loading:
                 return True
+        except FlowError:
+            raise
         except Exception:
             pass
         time.sleep(0.6)
@@ -923,17 +1016,20 @@ def reopen_nusuk_app(dev, emu_key: str, mult: float = 1.0) -> bool:
         return False
 
 
-def save_failure_artifacts(dev, tag: str) -> Optional[str]:
+def save_failure_artifacts(dev, tag: str, xml_str: Optional[str] = None) -> Optional[str]:
     if dev is None:
         return None
     try:
         os.makedirs(SHOTS_DIR, exist_ok=True)
-        fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{tag}"
+        fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:19]}_{tag}"
         base = os.path.join(SHOTS_DIR, fname)
         dev.screenshot(base + ".png")
         try:
+            raw_xml = xml_str if xml_str is not None else (
+                dev._orig_dump_hierarchy() if hasattr(dev, "_orig_dump_hierarchy") else dev.dump_hierarchy()
+            )
             with open(base + ".xml", "w", encoding="utf-8") as f:
-                f.write(dev.dump_hierarchy())
+                f.write(raw_xml)
         except Exception:
             pass
         files = sorted(
@@ -1402,10 +1498,12 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     # الضغط على زر "التحقق من حسابك" (540, 1010)
     dev.click(540, 1010)
     smart_sleep(1.5, mult)
-    wait_for_network_loading(dev, max_wait=12.0)
+    wait_for_network_loading(dev, max_wait=12.0, check_error=True)
 
     # 5. إدخال الإيميل وكلمة المرور
     cred_inputs = wait_edits(dev, 2, timeout=3.5 * mult)
+    if cred_inputs is None:
+        raise_if_screen_has_error(dev)
     if cred_inputs is not None and len(cred_inputs) >= 2:
         cred_inputs[0].set_text(email_val)
         smart_sleep(0.2, mult)
@@ -1429,7 +1527,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     otp_sent_at = time.time()
     dev.click(540, 1055)
     smart_sleep(1.8, mult)
-    wait_for_network_loading(dev, max_wait=12.0)
+    wait_for_network_loading(dev, max_wait=12.0, check_error=True)
 
     # 6. استلام كود OTP
     log.info(f"[{label}] انتظار كود الـ OTP لاسترجاع الحساب من {req.client_email}...")
@@ -1450,6 +1548,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
 
     for _ in range(25):
         dump_succ = dev.dump_hierarchy()
+        raise_if_screen_has_error(dev, dump_succ)
         if any(w in dump_succ for w in ("استعادة حسابك بنجاح", "استعادة حسابك", "تابع واستكشف", "استكشف")):
             if not click_text_in_xml(dev, dump_succ, ("تابع واستكشف", "استكشف", "تابع"), min_y=1600, max_y=1900):
                 dev.click(540, 1793)
@@ -1803,6 +1902,8 @@ def recover_account_api(req: RegisterRequest):
     with exclusive(LOCK_WAIT) as got:
         if not got:
             return BUSY_RESPONSE
+        dev = None
+        emu_key = "emu1"
         try:
             with _state_lock:
                 leader_active = STATE["group"]["leader_active"]
@@ -1815,10 +1916,15 @@ def recover_account_api(req: RegisterRequest):
                 with _state_lock:
                     STATE["speed_multiplier"] = mult
             dev = get_device(EMUS[emu_key]["serial"])
-            return run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
+            reset_device_error_capture(dev)
+            res = run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
+            if isinstance(res, dict) and not res.get("screenshot") and getattr(dev, "_last_captured_error_shot", None):
+                res["screenshot"] = getattr(dev, "_last_captured_error_shot", None)
+            return res
         except Exception as e:
             log.exception("خطأ في /api/recover")
-            return {"success": False, "status": "error", "error": str(e)}
+            shot = getattr(e, "screenshot", None) or (getattr(dev, "_last_captured_error_shot", None) if dev else None) or save_failure_artifacts(dev, f"{emu_key}_recover")
+            return {"success": False, "status": "error", "error": str(e), "screenshot": shot}
 
 
 def _run_register(req: RegisterRequest) -> dict:
@@ -1868,6 +1974,7 @@ def _run_register(req: RegisterRequest) -> dict:
     label = "المحاكي الأول (رئيسي)" if role == "leader" else f"المحاكي الثاني (مرافق {comp_num})"
 
     dev = get_device(emu["serial"])
+    reset_device_error_capture(dev)
     dev1 = None
 
     log.info("=" * 55)
@@ -1907,7 +2014,7 @@ def _run_register(req: RegisterRequest) -> dict:
         otp_sent_at = time.time()
         dev.click(558, 1138)
         smart_sleep(1.8, mult)
-        wait_for_network_loading(dev, max_wait=12.0)
+        wait_for_network_loading(dev, max_wait=12.0, check_error=True)
 
         # 3. استلام وإدخال كود OTP
         otp = fetch_nusuk_otp(req.client_email.strip(), req.client_pass, timeout=55, sent_after=otp_sent_at)
@@ -1923,7 +2030,7 @@ def _run_register(req: RegisterRequest) -> dict:
 
         # 4. انتظار انتهاء تحميل الـ OTP ثم 3 نقرات تنظيف
         smart_sleep(1.8, mult)
-        wait_for_network_loading(dev, max_wait=12.0)
+        wait_for_network_loading(dev, max_wait=12.0, check_error=True)
         for _ in range(3):
             dev.click(1000, 100)
             smart_sleep(0.3, mult)
@@ -1992,17 +2099,19 @@ def _run_register(req: RegisterRequest) -> dict:
         # 9. زر الحفظ النهائي وفحص النتيجة
         dev.click(540, 1040)
         smart_sleep(1.2, mult)
-        wait_for_network_loading(dev, max_wait=15.0)
+        wait_for_network_loading(dev, max_wait=15.0, check_error=True)
 
         outcome = None
         for _ in range(14):
-            screen_dump = dev.dump_hierarchy().lower()
+            raw_dump = dev.dump_hierarchy()
+            screen_dump = raw_dump.lower()
             if any(k in screen_dump for k in ALREADY_KEYS):
                 outcome = "already"
                 break
             if any(k in screen_dump for k in SUCCESS_KEYS):
                 outcome = "success"
                 break
+            raise_if_screen_has_error(dev, raw_dump)
             time.sleep(0.5)
 
         if outcome is None and len(dev(className="android.widget.EditText")) >= 2:
@@ -2010,15 +2119,17 @@ def _run_register(req: RegisterRequest) -> dict:
             smart_sleep(0.3, mult)
             dev.click(540, 1040)
             smart_sleep(1.2, mult)
-            wait_for_network_loading(dev, max_wait=10.0)
+            wait_for_network_loading(dev, max_wait=10.0, check_error=True)
             for _ in range(10):
-                screen_dump = dev.dump_hierarchy().lower()
+                raw_dump = dev.dump_hierarchy()
+                screen_dump = raw_dump.lower()
                 if any(k in screen_dump for k in ALREADY_KEYS):
                     outcome = "already"
                     break
                 if any(k in screen_dump for k in SUCCESS_KEYS):
                     outcome = "success"
                     break
+                raise_if_screen_has_error(dev, raw_dump)
                 time.sleep(0.5)
 
         if outcome == "already":
@@ -2124,7 +2235,7 @@ def _run_register(req: RegisterRequest) -> dict:
 
     except Exception as e:
         log.exception(f"[{label}] استثناء أثناء التنفيذ: {e}")
-        shot = save_failure_artifacts(dev, f"{emu_key}_{role}")
+        shot = getattr(e, "screenshot", None) or getattr(dev, "_last_captured_error_shot", None) or save_failure_artifacts(dev, f"{emu_key}_{role}")
         if dev1 is not None and dev1 is not dev:
             try:
                 if is_add_friend_dialog_open(dev1):
@@ -2133,6 +2244,19 @@ def _run_register(req: RegisterRequest) -> dict:
                 pass
         force_clean_login_state(dev, emu_key)
         return {"success": False, "status": "error", "error": str(e), "screenshot": shot}
+
+
+@app.api_route("/api/capture-screenshot", methods=["POST", "GET"])
+def capture_screenshot_api(emu_key: str = "emu1", tag: str = "manual_error"):
+    """التقاط اسكرين شوت فوري من المحاكي وحفظه"""
+    if emu_key not in EMUS:
+        emu_key = "emu1"
+    try:
+        dev = get_device(EMUS[emu_key]["serial"], timeout=8)
+        shot = save_failure_artifacts(dev, f"{emu_key}_{tag}")
+        return {"success": bool(shot), "screenshot": shot}
+    except Exception as e:
+        return {"success": False, "error": str(e), "screenshot": None}
 
 
 def register_browser_protocol():
