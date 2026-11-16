@@ -647,9 +647,18 @@ def bump_counter(emu_key: str):
 # ==========================================
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 AR_MONTHS = {
-    "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "ابريل": 4, "مايو": 5, "يونيو": 6,
-    "يوليو": 7, "أغسطس": 8, "اغسطس": 8, "سبتمبر": 9, "أكتوبر": 10, "اكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
+    "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "ابريل": 4, "إبريل": 4, "مايو": 5,
+    "يونيو": 6, "يونيه": 6, "يوليو": 7, "يوليه": 7, "أغسطس": 8, "اغسطس": 8,
+    "سبتمبر": 9, "أكتوبر": 10, "اكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
 }
+EN_MONTHS = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+AR_DIACRITICS_RE = re.compile(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]")
+ARABIC_DIGITS_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 OTP_KEYWORDS = ["nusuk", "نسك", "verification", "رمز", "otp"]
 _used_otp_ids = set()
 
@@ -1337,51 +1346,261 @@ def close_leader_group(dev1) -> bool:
 # ==========================================
 # فحص تصاريح الروضة ونظام استرجاع الحساب
 # ==========================================
-def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
-    """
-    فحص تصاريح الروضة الشريفة من شاشة المواعيد:
-    - لو حاجز لنفسه حالياً (مؤكد / منتظر التأكيد / ساري) -> مينفعش
-    - لو مستخدم أو منتهي:
-      - لو عدى 365 يوم على أحدث تصريح -> ينفع
-      - لو لم يمر 365 يوم -> مينفعش
-    - لو لا توجد أي تصاريح روضة سابقة -> ينفع
-    """
+def _normalize_permit_text(text: str) -> str:
+    s = AR_DIACRITICS_RE.sub("", str(text or "").translate(ARABIC_DIGITS_TRANS)).strip().lower()
+    s = s.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ٱ", "ا")
+    s = s.replace("ى", "ي").replace("ة", "ه").replace("ؤ", "و").replace("ئ", "ي")
+    return re.sub(r"\s+", " ", s)
+
+
+_AR_MONTHS_NORM = {_normalize_permit_text(k): v for k, v in AR_MONTHS.items()}
+
+
+def _classify_rawdah_status(status_text: str) -> str:
+    norm = _normalize_permit_text(status_text)
+    if not norm:
+        return ""
+    if any(hdr in norm for hdr in ("التصاريح الساريه", "active permits", "valid permits", "تفاصيل الحجز", "booking details")):
+        return ""
+
+    # يجب فحص الإلغاء أولاً لأن "ملغى من قبل المستخدم" تحتوي على كلمة "المستخدم"!
+    if any(k in norm for k in ("ملغي", "ملغاه", "الغاء", "cancel")):
+        return "cancelled"
+
+    if any(k in norm for k in ("غير مستخدم", "unused", "not used")):
+        return "unused"
+
+    has_neg = ("غير " in norm or "inactive" in norm or "invalid" in norm or "unconfirmed" in norm)
+    if not has_neg:
+        if any(k in norm for k in (
+            "موكد", "منتظر التاكيد", "بانتظار التاكيد", "قيد الانتظار",
+            "confirmed", "awaiting confirmation", "pending confirmation", "waiting confirmation"
+        )) or re.search(
+            r"(?:^|[\s\-:/])(?:ساري|ساريه|فعال|فعاله|قادم|قادمه|active|valid|upcoming|pending|awaiting)(?:$|[\s\-:/])",
+            norm
+        ):
+            return "active"
+
+    # التأكد أن "مستخدم" كلمة مستقلة وليست جزءاً من "المستخدم" أو أي عبارة ملغية
+    if (
+        "تم الاستخدام" in norm
+        or re.search(r"(?:^|[\s\-:/])مستخدم(?:ه|ين)?(?:$|[\s\-:/])", norm)
+        or "منتهي الصلاحيه" in norm
+        or re.search(r"(?:^|[\s\-:/])(?:منتهي|مكتمل)(?:ه)?(?:$|[\s\-:/])", norm)
+        or re.search(r"\b(?:used|completed|expired)\b", norm)
+    ):
+        return "used"
+
+    return ""
+
+
+def _parse_permit_date(text: str) -> Optional[datetime]:
+    raw = str(text or "").translate(ARABIC_DIGITS_TRANS).strip()
+    if not raw:
+        return None
+
+    m = re.search(r"(\d{1,2})\s+([\u0621-\u064A]+)\s+(\d{4})", raw)
+    if m:
+        day, mon_name, yr = int(m.group(1)), _normalize_permit_text(m.group(2)), int(m.group(3))
+        mon = _AR_MONTHS_NORM.get(mon_name)
+        if mon:
+            try:
+                return datetime(yr, mon, day)
+            except ValueError:
+                pass
+
+    m_en1 = re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,12})\s+(\d{4})\b", raw)
+    if m_en1:
+        day, mon_name, yr = int(m_en1.group(1)), m_en1.group(2).lower(), int(m_en1.group(3))
+        mon = EN_MONTHS.get(mon_name)
+        if mon:
+            try:
+                return datetime(yr, mon, day)
+            except ValueError:
+                pass
+
+    m_en2 = re.search(r"\b([A-Za-z]{3,12})\s+(\d{1,2}),?\s+(\d{4})\b", raw)
+    if m_en2:
+        mon_name, day, yr = m_en2.group(1).lower(), int(m_en2.group(2)), int(m_en2.group(3))
+        mon = EN_MONTHS.get(mon_name)
+        if mon:
+            try:
+                return datetime(yr, mon, day)
+            except ValueError:
+                pass
+
+    m_iso = re.search(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b", raw)
+    if m_iso:
+        yr, mon, day = int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3))
+        try:
+            return datetime(yr, mon, day)
+        except ValueError:
+            pass
+
+    m_dmy = re.search(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b", raw)
+    if m_dmy:
+        day, mon, yr = int(m_dmy.group(1)), int(m_dmy.group(2)), int(m_dmy.group(3))
+        try:
+            return datetime(yr, mon, day)
+        except ValueError:
+            pass
+
+    return None
+
+
+def _is_booking_header(text: str) -> bool:
+    norm = _normalize_permit_text(text)
+    return (
+        "رقم الحجز" in norm
+        or "booking no" in norm
+        or "booking number" in norm
+        or "booking #" in norm
+        or "permit no" in norm
+        or "reservation no" in norm
+    )
+
+
+def _is_rawdah_type_text(text: str) -> bool:
+    norm = _normalize_permit_text(text)
+    return "الروضه" in norm or "rawdah" in norm
+
+
+def _populate_card_from_items(card: dict, items: list):
+    for item in items:
+        t = item["text"]
+        if _is_booking_header(t) and not card["id"]:
+            card["id"] = t
+        elif _is_rawdah_type_text(t):
+            card["type"] = t
+        else:
+            skind = _classify_rawdah_status(t)
+            if skind:
+                card["status"] = t
+                card["kind"] = skind
+                continue
+            tm = re.search(r"\b(\d{1,2}:\d{2}(?:\s*(?:AM|PM|ص|م))?)\b", t.translate(ARABIC_DIGITS_TRANS), re.IGNORECASE)
+            if tm and not card["time_str"]:
+                card["time_str"] = tm.group(1).strip()
+            dt = _parse_permit_date(t)
+            if dt and not card["date"]:
+                card["date_str"] = t
+                card["date"] = dt
+
+
+def _extract_permit_cards_from_xml(xml_str: str) -> list:
     try:
         root = ET.fromstring(xml_str.encode("utf-8"))
-        nodes = [n.attrib.get("text", "").strip() for n in root.iter() if n.attrib.get("text")]
     except Exception:
-        nodes = []
+        return []
+
+    items = []
+    seen_cy = set()
+    for node in root.iter():
+        if node.attrib.get("class") == "android.widget.EditText":
+            continue
+        raw_t = (node.attrib.get("text") or "").strip()
+        raw_d = (node.attrib.get("content-desc") or "").strip() if not raw_t else ""
+        bounds = node.attrib.get("bounds") or ""
+        cy = None
+        bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+        if bm:
+            cy = (int(bm.group(2)) + int(bm.group(4))) // 2
+        lines = [raw_t] if raw_t else [ln.strip() for ln in raw_d.splitlines() if ln.strip()]
+        for ln in lines:
+            key = (ln, cy)
+            if ln and key not in seen_cy:
+                seen_cy.add(key)
+                items.append({"text": ln, "cy": cy})
+
+    headers = [it for it in items if _is_booking_header(it["text"])]
+    bounded_headers = sorted([h for h in headers if h["cy"] is not None], key=lambda h: h["cy"])
+
+    # إزالة التكرار لو عنوان الحجز مقسم لعنصرين في نفس السطر
+    merged_headers = []
+    for h in bounded_headers:
+        if merged_headers and abs(h["cy"] - merged_headers[-1]["cy"]) <= 25:
+            continue
+        merged_headers.append(h)
 
     permits = []
-    curr = None
-    for t in nodes:
-        if "رقم الحجز" in t:
-            if curr:
-                permits.append(curr)
-            curr = {"id": t, "type": "", "status": "", "date_str": "", "time_str": "", "date": None}
-        elif curr:
-            if "تصريح الروضة" in t:
-                curr["type"] = t
-            elif any(s in t for s in ("مستخدم", "منتهي", "ساري", "ملغى", "ملغي", "مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد")):
-                curr["status"] = t
-            elif re.match(r"^\d{1,2}:\d{2}$", t):
-                curr["time_str"] = t
+    if merged_headers:
+        cards_buckets = [
+            {"id": h["text"], "type": "", "status": "", "kind": "", "date_str": "", "time_str": "", "date": None, "_items": []}
+            for h in merged_headers
+        ]
+        for it in items:
+            cy = it["cy"]
+            if cy is None:
+                continue
+            target_idx = None
+            for idx_h, h in enumerate(merged_headers):
+                low_y = h["cy"] - 85
+                high_y = merged_headers[idx_h + 1]["cy"] - 85 if idx_h + 1 < len(merged_headers) else 999999
+                if low_y <= cy < high_y:
+                    target_idx = idx_h
+                    break
+            if target_idx is not None:
+                cards_buckets[target_idx]["_items"].append(it)
+        for cb in cards_buckets:
+            _populate_card_from_items(cb, cb["_items"])
+            permits.append(cb)
+        return permits
+
+    # مسار بديل إذا كانت العناصر بدون إحداثيات bounds أو بدون بادئة رقم الحجز
+    if headers:
+        curr = None
+        pending_status = ""
+        pending_kind = ""
+        for it in items:
+            t = it["text"]
+            if _is_booking_header(t):
+                if curr:
+                    permits.append(curr)
+                curr = {"id": t, "type": "", "status": pending_status, "kind": pending_kind, "date_str": "", "time_str": "", "date": None}
+                pending_status = ""
+                pending_kind = ""
+            elif curr:
+                _populate_card_from_items(curr, [it])
             else:
-                m = re.match(r"(\d{1,2})\s+([\u0621-\u064A]+)\s+(\d{4})", t)
-                if m:
-                    day, mon_name, yr = int(m.group(1)), m.group(2), int(m.group(3))
-                    mon = AR_MONTHS.get(mon_name)
-                    if mon:
-                        curr["date_str"] = t
-                        curr["date"] = datetime(yr, mon, day)
-    if curr:
-        permits.append(curr)
+                sk = _classify_rawdah_status(t)
+                if sk:
+                    pending_status = t
+                    pending_kind = sk
+        if curr:
+            permits.append(curr)
+        return permits
 
-    rawdah_permits = [p for p in permits if "الروضة" in p.get("type", "")]
+    # ملاذ أخير: إذا ظهرت بطاقة تصريح روضة وحالتها بدون "رقم الحجز / Booking No"
+    rawdah_anchors = [it for it in items if _is_rawdah_type_text(it["text"]) and it["cy"] is not None]
+    if rawdah_anchors and any(_classify_rawdah_status(it["text"]) for it in items):
+        for anc in rawdah_anchors:
+            cb = {"id": "", "type": anc["text"], "status": "", "kind": "", "date_str": "", "time_str": "", "date": None}
+            near = [it for it in items if it["cy"] is not None and (anc["cy"] - 180) <= it["cy"] <= (anc["cy"] + 220)]
+            _populate_card_from_items(cb, near)
+            if cb["status"] or cb["date"]:
+                permits.append(cb)
 
-    # 1. هل المعتمر حاجز لنفسه حالياً (مؤكد أو بانتظار التأكيد)؟
-    active_keywords = ("مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد", "ساري", "قادم", "فعال")
-    active_rawdah = [p for p in rawdah_permits if any(k in p.get("status", "") for k in active_keywords)]
+    return permits
+
+
+def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
+    """
+    فحص تصاريح الروضة الشريفة من شاشة المواعيد (عربي/إنجليزي):
+    - لو حاجز لنفسه حالياً (مؤكد / منتظر التأكيد / ساري / Active / Confirmed) -> مينفعش
+    - لو مستخدم فعلياً أو منتهي (بدون احتساب الحجوزات الملغية):
+      - لو عدى 365 يوم على أحدث تصريح -> ينفع
+      - لو لم يمر 365 يوم -> مينفعش
+    - لو التصريح ملغي (ملغى من قبل المستخدم / ملغي / Cancelled) -> ينفع تماماً (لا يمنع التسجيل كأدمن أو الربط كمرافق)
+    - لو لا توجد أي تصاريح روضة سابقة -> ينفع
+    """
+    permits = _extract_permit_cards_from_xml(xml_str)
+    rawdah_permits = [p for p in permits if _is_rawdah_type_text(p.get("type", ""))]
+    for p in rawdah_permits:
+        if not p.get("kind"):
+            p["kind"] = _classify_rawdah_status(p.get("status", ""))
+
+    # 1. هل المعتمر حاجز لنفسه حالياً (مؤكد أو بانتظار التأكيد أو ساري)؟
+    active_rawdah = [p for p in rawdah_permits if p.get("kind") == "active"]
     if active_rawdah:
         p = active_rawdah[0]
         date_disp = p.get("date_str") or "محدد"
@@ -1390,8 +1609,8 @@ def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
         reason = f"مينفعش - المعتمر حاجز لنفسه تصريح روضة ({stat_disp}) بتاريخ {date_disp} {time_disp}".strip()
         return False, reason, {"status": stat_disp, "date": date_disp, "time": time_disp, "type": p.get("type")}
 
-    # 2. فحص التصاريح السابقة (مستخدم / منتهي)
-    used_rawdah = [p for p in rawdah_permits if any(k in p.get("status", "") for k in ("مستخدم", "منتهي")) and p.get("date")]
+    # 2. فحص التصاريح المستخدمة فعلياً أو المنتهية (مستبعد منها الملغي من قبل المستخدم)
+    used_rawdah = [p for p in rawdah_permits if p.get("kind") == "used" and p.get("date")]
     now = datetime.now()
     if used_rawdah:
         latest = max(used_rawdah, key=lambda x: x["date"])
@@ -1404,7 +1623,24 @@ def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
             reason = f"مينفعش - دخل الروضة بتاريخ {date_disp} (مر فقط {days_passed} يوم ولم يكمل سنة)"
             return False, reason, {"status": latest.get("status"), "date": date_disp, "days_passed": days_passed, "type": latest.get("type")}
 
-    # 3. لا توجد تصاريح روضة مستخدمة أو مؤكدة
+    # 3. التصاريح الملغية لا تمنع التسجيل أو الربط أبداً
+    cancelled_rawdah = [p for p in rawdah_permits if p.get("kind") == "cancelled"]
+    if cancelled_rawdah:
+        dated_cancels = [p for p in cancelled_rawdah if p.get("date")]
+        latest_c = max(dated_cancels, key=lambda x: x["date"]) if dated_cancels else cancelled_rawdah[0]
+        stat_disp = latest_c.get("status") or "ملغى"
+        date_disp = latest_c.get("date_str") or "غير محدد"
+        time_disp = latest_c.get("time_str") or ""
+        reason = f"ينفع - تصريح الروضة ({stat_disp}) بتاريخ {date_disp} (الحجز ملغي ويمكن تسجيله كأدمن أو ربطه كمرافق)"
+        return True, reason, {
+            "status": stat_disp,
+            "date": date_disp,
+            "time": time_disp,
+            "type": latest_c.get("type"),
+            "cancelled": True,
+        }
+
+    # 4. لا توجد تصاريح روضة مستخدمة أو مؤكدة
     reason = "ينفع - لا توجد أي تصاريح روضة سابقة للمعتمر"
     return True, reason, {"status": "none", "date": None}
 
@@ -1595,9 +1831,16 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     eligible, reason, details = evaluate_rawdah_permits_from_xml(permits_xml)
     log.info(f"📊 [{label}] نتيجة فحص الأحقية لـ {pname}: {reason}")
 
-    # الرجوع لصفحة البروفايل
-    dev.press("back")
-    smart_sleep(1.2, mult)
+    # الرجوع لصفحة البروفايل والتأكد من استقرارها
+    for _ in range(2):
+        dev.press("back")
+        smart_sleep(1.1, mult)
+        dump_back = dev.dump_hierarchy()
+        if any(pm in dump_back for pm in ("عرض الكل", "Show All", "Show all", "بطاقاتي", "My Cards")) or (nid and nid in dump_back):
+            break
+        if any(om in dump_back for om in ("المواعيد", "Appointments", "طلباتي", "My Orders", "تصريح الروضة")):
+            dev.click(1019, 91)
+            smart_sleep(1.1, mult)
 
     # 10. تنفيذ القرار
     if not eligible:
@@ -1908,7 +2151,12 @@ def recover_account_api(req: RegisterRequest):
             with _state_lock:
                 leader_active = STATE["group"]["leader_active"]
                 comp_count = len(STATE["group"]["companions"])
-            role = req.force_role or ("companion" if leader_active else "leader")
+            force_role = (req.force_role or "").strip().lower() or None
+            role = force_role or ("companion" if leader_active else "leader")
+            if role == "companion" and not leader_active:
+                return {"success": False, "status": "invalid_state", "error": "لا يوجد حساب رئيسي نشط - سجّل الرئيسي أولاً"}
+            if role == "leader" and leader_active:
+                return {"success": False, "status": "invalid_state", "error": "يوجد حساب رئيسي نشط - أنهِ المجموعة أولاً"}
             emu_key = "emu1" if role == "leader" else "emu2"
             comp_num = comp_count + 1
             mult = float(req.speed_multiplier or STATE.get("speed_multiplier", 1.0))
