@@ -2818,18 +2818,37 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
     if uid is None:
         log.warning("⚠️ UserID غير معروف لهذا التوكن — لو رجع -9999 املأ خانة UserId يدويًا أو استخدم الدخول التلقائي")
 
-    log.info("📋 جلب تصاريح الروضة للحجز %s (token_source=%s)...", req.reservation_id, token_info.get("source"))
-    res = nusuk_http_request(
-        "rawdah/v2/getRawdahPermits",
-        method="POST",
-        body_dict={"Request": inner},
-        bearer_token=token_info["token"],
-        device_id=req.device_id,
-        lang=req.lang,
-    )
-
     refreshed = False
-    if _nusuk_is_session_error(res.get("data")) and req.email and req.password:
+    endpoints_try = ["rawdah/v2/getRawdahPermits", "umrah/v2/getUmrahPermitsByResId"]
+    log.info("📋 جلب تصاريح الروضة للحجز %s (UserID=%s, token_source=%s)...",
+             req.reservation_id, uid, token_info.get("source"))
+
+    def _attempt_all():
+        results = []
+        for ep_try in endpoints_try:
+            res_try = nusuk_http_request(
+                ep_try,
+                method="POST",
+                body_dict={"Request": inner},
+                bearer_token=token_info["token"],
+                device_id=req.device_id,
+                lang=req.lang,
+            )
+            upstream_try = res_try.get("data")
+            code_try = _nusuk_response_code(upstream_try)
+            ids_try = nusuk_extract_permit_ids(upstream_try)
+            try:
+                log.info("📋 [%s] ids=%s | code=%s | %s", ep_try, len(ids_try), code_try,
+                         json.dumps(upstream_try, ensure_ascii=False)[:600])
+            except Exception:
+                pass
+            results.append({"endpoint": ep_try, "res": res_try, "upstream": upstream_try,
+                            "code": code_try, "ids": ids_try})
+        return results
+
+    attempts = _attempt_all()
+
+    if all(_nusuk_is_session_error(a["upstream"]) for a in attempts) and req.email and req.password:
         log.warning("🔁 توكن نسك منتهي — إعادة تسجيل دخول تلقائي ثم إعادة المحاولة...")
         _nusuk_drop_cached_token(req.email)
         retry_token = resolve_nusuk_bearer_token(
@@ -2846,26 +2865,23 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         if retry_token.get("ok"):
             token_info = retry_token
             refreshed = True
-            res = nusuk_http_request(
-                "rawdah/v2/getRawdahPermits",
-                method="POST",
-                body_dict={"Request": inner},
-                bearer_token=token_info["token"],
-                device_id=req.device_id,
-                lang=req.lang,
-            )
+            attempts = _attempt_all()
 
-    upstream = res.get("data")
-    permit_ids = nusuk_extract_permit_ids(upstream)
+    best = None
+    for a in attempts:
+        if a["ids"] or a["code"] == 200:
+            best = a
+            break
+    if best is None:
+        best = attempts[-1]
+
+    res = best["res"]
+    upstream = best["upstream"]
+    permit_ids = best["ids"]
     env = _nusuk_envelope(upstream)
     response_code = env.get("ResponseCode", env.get("responseCode"))
     response_desc = env.get("ResponseDesc", env.get("responseDesc"))
     top_keys = list(upstream.keys())[:12] if isinstance(upstream, dict) else []
-    try:
-        log.info("📋 رد getRawdahPermits: ids=%s | code=%s | %s",
-                 len(permit_ids), response_code, json.dumps(upstream, ensure_ascii=False)[:700])
-    except Exception:
-        pass
 
     return {
         "success": res["ok"],
@@ -2873,6 +2889,9 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         "response_code": response_code,
         "response_desc": response_desc,
         "top_keys": top_keys,
+        "used_endpoint": best["endpoint"],
+        "attempts": [{"endpoint": a["endpoint"], "code": a["code"], "ids": len(a["ids"]),
+                      "http_status": a["res"].get("http_status")} for a in attempts],
         "used_user_id": uid,
         "user_id_missing": uid is None,
         "refreshed_token": refreshed,
