@@ -2082,7 +2082,7 @@ NUSUK_APP_VERSION_HEADER = os.getenv("NUSUK_APP_VERSION_HEADER", "17.5.8(175804)
 NUSUK_NUSUK_VERSION_HEADER = os.getenv("NUSUK_NUSUK_VERSION_HEADER", "2")            # header "NUSUK_VERSION" (bk8.Q4)
 NUSUK_OS_VERSION_HEADER = os.getenv("NUSUK_OS_VERSION_HEADER", "13 (33)")            # header "os-version"
 NUSUK_USER_AGENT = os.getenv("NUSUK_USER_AGENT", "okhttp/4.12.0")                    # السيرفر يرفض الطلبات بدون UA (traceError="bot")
-NUSUK_DEVICE_ID = os.getenv("NUSUK_DEVICE_ID", secrets.token_hex(8)) # e9.O(context) = ANDROID_ID (16 hex) — يولّد مرة واحدة لكل تشغيل
+NUSUK_DEVICE_ID = os.getenv("NUSUK_DEVICE_ID", secrets.token_hex(8)) # e9.O(context) = ANDROID_ID (16 hex)
 NUSUK_BASE_URL = "https://nusukapp.nusuk.sa/nusuk/"
 NUSUK_PUBLIC_BASE_URL = "https://nusukapp.nusuk.sa/nusuk/public/"    # PublicNetworkModule — كل تسجيل الدخول/الـ OTP هنا
 
@@ -2251,9 +2251,6 @@ def nusuk_http_request(
 # ==========================================
 # Nusuk API Login — جلب الـ Bearer Token تلقائياً (بدون محاكي)
 #   v2/login (public) → OTP من Gmail → v2/login/validate-otp → token
-#   الخوارزميات مستخرجة من APK:
-#     LoginWithEmailUseCase            (nonce + hmacKey + AES)
-#     PublicAuthApiService             (v2/login , v2/login/validate-otp)
 # ==========================================
 _NUSUK_TOKEN_CACHE: Dict[str, dict] = {}
 _NUSUK_TOKEN_LOCK = threading.Lock()
@@ -2261,7 +2258,7 @@ NUSUK_TOKEN_TTL = float(os.getenv("NUSUK_TOKEN_TTL", "2700"))
 
 
 def nusuk_make_nonce(email: str, password: str) -> Tuple[str, str]:
-    """يرجّع (nonce, hmacKey) مطابق لـ LoginWithEmailUseCase$invoke$nonceResult$1 (SHA3-256 + HMAC-SHA3-256)."""
+    """(nonce, hmacKey) مطابق لـ LoginWithEmailUseCase$invoke$nonceResult$1 (SHA3-256 + HMAC-SHA3-256)."""
     now_ms = int(datetime.now(timezone(timedelta(hours=3))).timestamp() * 1000)
     str2 = f"{now_ms % 1000000:06d}"
     rnd_a = secrets.token_bytes(4).hex()
@@ -2301,6 +2298,27 @@ def _nusuk_envelope(payload) -> dict:
     return {}
 
 
+def _nusuk_response_code(payload):
+    env = _nusuk_envelope(payload)
+    code = env.get("ResponseCode", env.get("responseCode"))
+    try:
+        return int(code)
+    except (TypeError, ValueError):
+        return None
+
+
+def _nusuk_is_session_error(payload) -> bool:
+    """-401 / انتهى وقت الجلسة = التوكن منتهي أو غير صالح → لازم توكن جديد."""
+    return _nusuk_response_code(payload) in (-401, -403, 401, 403)
+
+
+def _nusuk_drop_cached_token(email: Optional[str]) -> None:
+    if not email:
+        return
+    with _NUSUK_TOKEN_LOCK:
+        _NUSUK_TOKEN_CACHE.pop(email.strip().lower(), None)
+
+
 def nusuk_extract_data(payload) -> dict:
     env = _nusuk_envelope(payload)
     source = env or (payload if isinstance(payload, dict) else {})
@@ -2313,7 +2331,7 @@ def nusuk_extract_data(payload) -> dict:
 
 
 def nusuk_extract_token(payload) -> Optional[str]:
-    """يبحث عن حقل token في أي مكان داخل الرد (data / Response / UserInfo…)."""
+    """يبحث عن حقل token في أي مكان داخل الرد."""
     def walk(node, depth=0):
         if depth > 6:
             return None
@@ -2333,6 +2351,37 @@ def nusuk_extract_token(payload) -> Optional[str]:
         return None
 
     return walk(payload)
+
+
+def nusuk_extract_permit_ids(payload) -> List[str]:
+    """يستخرج أرقام التصاريح (PermitID) من أي شكل رد (Reservations[].Permits[] …)."""
+    ids: List[str] = []
+    seen = set()
+
+    def walk(node, depth=0):
+        if depth > 12:
+            return
+        if isinstance(node, list):
+            for item in node:
+                walk(item, depth + 1)
+            return
+        if isinstance(node, dict):
+            for k, v in node.items():
+                key = re.sub(r"[^a-z]", "", str(k).lower())
+                if key in ("permitid", "permitno", "permitnumber"):
+                    val = None
+                    if isinstance(v, (int, float)):
+                        val = str(int(v))
+                    elif isinstance(v, str) and v.strip().isdigit():
+                        val = v.strip()
+                    if val and val not in seen:
+                        seen.add(val)
+                        ids.append(val)
+                else:
+                    walk(v, depth + 1)
+
+    walk(payload, 0)
+    return ids
 
 
 def nusuk_api_login(email: str, password: str, device_id: Optional[str] = None, lang: str = "ar") -> dict:
@@ -2463,7 +2512,7 @@ def resolve_nusuk_bearer_token(bearer_token: Optional[str] = None, email: Option
                                otp_email: Optional[str] = None, otp_app_password: Optional[str] = None,
                                otp_timeout: int = 90, device_id: Optional[str] = None,
                                lang: str = "ar") -> dict:
-    """يرجّع token جاهز: إما الممرَّر مباشرة أو عن طريق تسجيل دخول تلقائي بالـ API."""
+    """يرجّع token جاهز: إما الممرَّر مباشرة أو عن طريق تسجيل دخول تلقائي."""
     if bearer_token and bearer_token.strip():
         return {"ok": True, "token": bearer_token.strip(), "source": "request"}
     if email and password:
@@ -2517,7 +2566,7 @@ def nusuk_token_api(req: NusukTokenRequest):
 
 @app.get("/api/nusuk/token")
 def nusuk_token_cache_api(email: str):
-    """قراءة التوكن المخزّن مؤقتاً لحساب معيّن (لو لسه صالح)."""
+    """قراءة التوكن المخزّن مؤقتاً لحساب معيّن."""
     item = _nusuk_cache_get((email or "").strip().lower())
     if not item:
         return {"success": False, "error": "لا يوجد توكن مخزّن صالح لهذا الحساب", "email": email}
@@ -2544,7 +2593,7 @@ def nusuk_token_clear_api(req: NusukTokenClearRequest):
 
 class CancelPermitAPIRequest(BaseModel):
     bearer_token: Optional[str] = None          # اختياري: لو مش موجود، السيرفر يعمل login ويجيب التوكن بنفسه
-    email: Optional[str] = None                 # إيميل حساب نسك (لو bearer_token مش موجود)
+    email: Optional[str] = None                 # إيميل حساب نسك
     password: Optional[str] = None              # باسورد حساب نسك
     otp: Optional[str] = None                   # كود OTP يدوي (اختياري)
     otp_email: Optional[str] = None             # بريد Gmail اللي بيوصل عليه OTP
@@ -2584,7 +2633,7 @@ def build_cancel_permit_payload(req: CancelPermitAPIRequest) -> dict:
     inner: dict = {
         "Count": len(permits) if permits else 1,
         "DeviceID": req.device_id or NUSUK_DEVICE_ID,
-        "Latitude": "19.545",        # نفس الثوابت الثابتة في edr.d للـ mapper
+        "Latitude": "19.545",
         "LocationDesc": "KSA",
         "Longitude": "19.5757",
         "Permits": permits,
@@ -2641,12 +2690,44 @@ def rawdah_cancel_permit_api(req: CancelPermitAPIRequest):
         lang=req.lang,
         extra_headers=req.extra_headers,
     )
+
+    refreshed = False
+    if _nusuk_is_session_error(res.get("data")) and req.email and req.password:
+        log.warning("🔁 توكن نسك منتهي — إعادة تسجيل دخول تلقائي ثم إعادة المحاولة...")
+        _nusuk_drop_cached_token(req.email)
+        retry_token = resolve_nusuk_bearer_token(
+            bearer_token=None,
+            email=req.email,
+            password=req.password,
+            otp=req.otp,
+            otp_email=req.otp_email,
+            otp_app_password=req.otp_app_password,
+            otp_timeout=req.otp_timeout,
+            device_id=req.device_id,
+            lang=req.lang,
+        )
+        if retry_token.get("ok"):
+            token_info = retry_token
+            refreshed = True
+            res = nusuk_http_request(
+                ep,
+                method="POST",
+                body_dict=send_body,
+                bearer_token=token_info["token"],
+                device_id=req.device_id,
+                lang=req.lang,
+                extra_headers=req.extra_headers,
+            )
+
     return {
         "success": res["ok"],
         "endpoint": ep,
         "encrypted": req.encrypt_body,
+        "refreshed_token": refreshed,
         "token_source": token_info.get("source"),
         "otp_id": token_info.get("otp_id"),
+        "response_code": _nusuk_response_code(res.get("data")),
+        "response_desc": _nusuk_envelope(res.get("data")).get("ResponseDesc", _nusuk_envelope(res.get("data")).get("responseDesc")),
         "sent_request": raw_body,
         **res,
     }
@@ -2670,7 +2751,7 @@ class RawdahPermitsRequest(BaseModel):
 
 @app.post("/api/rawdah/permits")
 def rawdah_permits_api(req: RawdahPermitsRequest):
-    """جلب تصاريح الروضة لحجز معيّن (rawdah/v2/getRawdahPermits) — عشان تستخرج permit_ids قبل الإلغاء."""
+    """جلب تصاريح الروضة لحجز معيّن (rawdah/v2/getRawdahPermits) — لاستخراج permit_ids قبل الإلغاء."""
     token_info = resolve_nusuk_bearer_token(
         bearer_token=req.bearer_token,
         email=req.email,
@@ -2703,8 +2784,53 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         device_id=req.device_id,
         lang=req.lang,
     )
+
+    refreshed = False
+    if _nusuk_is_session_error(res.get("data")) and req.email and req.password:
+        log.warning("🔁 توكن نسك منتهي — إعادة تسجيل دخول تلقائي ثم إعادة المحاولة...")
+        _nusuk_drop_cached_token(req.email)
+        retry_token = resolve_nusuk_bearer_token(
+            bearer_token=None,
+            email=req.email,
+            password=req.password,
+            otp=req.otp,
+            otp_email=req.otp_email,
+            otp_app_password=req.otp_app_password,
+            otp_timeout=req.otp_timeout,
+            device_id=req.device_id,
+            lang=req.lang,
+        )
+        if retry_token.get("ok"):
+            token_info = retry_token
+            refreshed = True
+            res = nusuk_http_request(
+                "rawdah/v2/getRawdahPermits",
+                method="POST",
+                body_dict={"Request": inner},
+                bearer_token=token_info["token"],
+                device_id=req.device_id,
+                lang=req.lang,
+            )
+
+    upstream = res.get("data")
+    permit_ids = nusuk_extract_permit_ids(upstream)
+    env = _nusuk_envelope(upstream)
+    response_code = env.get("ResponseCode", env.get("responseCode"))
+    response_desc = env.get("ResponseDesc", env.get("responseDesc"))
+    top_keys = list(upstream.keys())[:12] if isinstance(upstream, dict) else []
+    try:
+        log.info("📋 رد getRawdahPermits: ids=%s | code=%s | %s",
+                 len(permit_ids), response_code, json.dumps(upstream, ensure_ascii=False)[:700])
+    except Exception:
+        pass
+
     return {
         "success": res["ok"],
+        "permit_ids": permit_ids,
+        "response_code": response_code,
+        "response_desc": response_desc,
+        "top_keys": top_keys,
+        "refreshed_token": refreshed,
         "token_source": token_info.get("source"),
         "otp_id": token_info.get("otp_id"),
         "sent_request": inner,
@@ -2719,7 +2845,7 @@ def serve_index():
         return FileResponse(INDEX_FILE, media_type="text/html")
     return {
         "success": False,
-        "error": "index.html غير موجود بجوار server_updated.py",
+        "error": "index.html غير موجود بجوار server.py",
         "hint": "ضع ملف الواجهة باسم index.html في مجلد السيرفر، أو حدد مساره في NUSUK_INDEX_FILE",
     }
 
