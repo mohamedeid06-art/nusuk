@@ -2327,6 +2327,39 @@ def _nusuk_pick_user_id(data) -> Optional[int]:
     return None
 
 
+_NUSUK_ERROR_HINTS = {
+    "10017026": "التصريح مستخدم من قبل ولا يمكن إلغاؤه",
+    "-1010106002": "التصريح مستخدم من قبل ولا يمكن إلغاؤه",
+    "113": "تعذر معالجة الطلب — بيانات غير مكتملة أو غير صحيحة",
+    "-9999": "خطأ عام من نسك — راجع UserID ورقم الحجز",
+    "1": "بيانات الطلب غير صحيحة أو غير مكتملة",
+    "-401": "الجلسة انتهت — التوكن منتهي",
+    "-403": "غير مسموح — الجلسة منتهية",
+}
+
+
+def nusuk_error_hint(payload) -> Optional[str]:
+    """ترجمة أكواد أخطاء نسك لرسالة عربية واضحة."""
+    env = _nusuk_envelope(payload)
+    if not env:
+        return None
+    code = str(env.get("ResponseCode", env.get("responseCode")) or "")
+    desc = str(env.get("ResponseDesc", env.get("responseDesc")) or "")
+    hint = _NUSUK_ERROR_HINTS.get(code)
+    if not hint:
+        m = re.search(r"-?\d{6,}", desc)
+        if m:
+            hint = _NUSUK_ERROR_HINTS.get(m.group(0))
+    if not hint:
+        if "مستخدم" in desc:
+            hint = "التصريح مستخدم من قبل ولا يمكن إلغاؤه"
+        elif "منتهي" in desc or "انتهت" in desc:
+            hint = "التصريح منتهي ولا يمكن إلغاؤه"
+        elif "ملغ" in desc:
+            hint = "التصريح ملغي بالفعل"
+    return hint
+
+
 def _nusuk_user_id_from_jwt(token: Optional[str]) -> Optional[int]:
     """يحاول استخراج UserID من payload التوكن لو كان JWT (لحالة التوكن المُلصق يدويًا)."""
     if not token or token.count(".") != 2:
@@ -2849,6 +2882,7 @@ def rawdah_cancel_permit_api(req: CancelPermitAPIRequest):
         "otp_id": token_info.get("otp_id"),
         "response_code": _nusuk_response_code(res.get("data")),
         "response_desc": _nusuk_envelope(res.get("data")).get("ResponseDesc", _nusuk_envelope(res.get("data")).get("responseDesc")),
+        "error_hint": nusuk_error_hint(res.get("data")),
         "sent_request": raw_body,
         **res,
     }
@@ -2978,6 +3012,7 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         "permit_ids": permit_ids,
         "response_code": response_code,
         "response_desc": response_desc,
+        "error_hint": nusuk_error_hint(upstream),
         "top_keys": top_keys,
         "used_endpoint": best["endpoint"],
         "attempts": [{"endpoint": a["endpoint"], "code": a["code"], "ids": len(a["ids"]),
@@ -3085,8 +3120,10 @@ def nusuk_active_permits_api(req: ActivePermitsRequest):
         **summary,
         "response_code": env.get("ResponseCode", env.get("responseCode")),
         "response_desc": env.get("ResponseDesc", env.get("responseDesc")),
+        "error_hint": nusuk_error_hint(upstream),
         "history_response_code": env_cert.get("ResponseCode", env_cert.get("responseCode")),
         "history_response_desc": env_cert.get("ResponseDesc", env_cert.get("responseDesc")),
+        "history_error_hint": nusuk_error_hint(res_cert.get("data")),
         "refreshed_token": refreshed,
         "token_source": token_info.get("source"),
         "otp_id": token_info.get("otp_id"),
@@ -3098,6 +3135,321 @@ def nusuk_active_permits_api(req: ActivePermitsRequest):
         "active_permit_ids": active_permit_ids,
         "history_permit_ids": history_ids,
         "permit_ids": all_ids,
+    }
+
+
+# ==========================================
+# Rawdah Booking API — المواعيد المتاحة + حجز تصريح + تأكيد
+# ==========================================
+class RawdahSlotsRequest(BaseModel):
+    date: str
+    to_date: Optional[str] = None
+    count: int = 1
+    service_id: int = 20          # RAWDAH_MALE=20 / RAWDAH_FEMALE=21
+    queue_type: int = 0           # 0=REGULAR, 1=INSTANT, 2=ALL
+    date_type: int = 1
+    latitude: str = "24.4672"
+    longitude: str = "39.6111"
+    bearer_token: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    otp: Optional[str] = None
+    otp_email: Optional[str] = None
+    otp_app_password: Optional[str] = None
+    otp_timeout: int = 90
+    device_id: Optional[str] = None
+    lang: str = "ar"
+
+
+def _norm_date(value: str) -> str:
+    s = str(value or "").strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return s
+
+
+def summarize_rawdah_slots(payload) -> dict:
+    data = nusuk_extract_data(payload)
+    dates = []
+    if isinstance(data, dict):
+        for d in (data.get("AvailableDates") or []):
+            if not isinstance(d, dict):
+                continue
+            slots = []
+            for itv in (d.get("Intervals") or []):
+                if not isinstance(itv, dict):
+                    continue
+                gender = itv.get("Gender")
+                timing = itv.get("Timing")
+                for s in (itv.get("Timeslots") or []):
+                    if not isinstance(s, dict):
+                        continue
+                    slots.append({
+                        "timeslot_id": s.get("TimeslotID"),
+                        "time_ar": s.get("TimeAr"),
+                        "time_la": s.get("TimeLa"),
+                        "percentage": s.get("Percentage"),
+                        "is_instant": s.get("IsInstant"),
+                        "gender": gender,
+                        "timing": timing,
+                        "service_id": s.get("ServiceId"),
+                        "slot_state": s.get("SlotState"),
+                        "ap_id": s.get("apId"),
+                    })
+            dates.append({
+                "date": d.get("Date"),
+                "date_type": d.get("DateType"),
+                "percentage": d.get("Percentage"),
+                "percentage_color": d.get("PercentageColor"),
+                "instant_ineligibility": d.get("InstantInEligibilityReason"),
+                "slots": slots,
+            })
+    return {
+        "dates": dates,
+        "total_slots": sum(len(x["slots"]) for x in dates),
+        "server_date_time": data.get("DateTime") if isinstance(data, dict) else None,
+    }
+
+
+@app.post("/api/rawdah/available-slots")
+def rawdah_available_slots_api(req: RawdahSlotsRequest):
+    """جلب المواعيد المتاحة للروضة (rawdah/v2/availableSlotDays — جسم مشفّر AES)."""
+    token_info = resolve_nusuk_bearer_token(
+        bearer_token=req.bearer_token, email=req.email, password=req.password, otp=req.otp,
+        otp_email=req.otp_email, otp_app_password=req.otp_app_password,
+        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+    )
+    if not token_info.get("ok"):
+        return {"success": False, "stage": token_info.get("stage"),
+                "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
+
+    inner = {
+        "Request": {
+            "Count": req.count,
+            "Date": _norm_date(req.date),
+            "DateType": req.date_type,
+            "Location": {"Latitude": req.latitude, "Longitude": req.longitude},
+            "QueueType": req.queue_type,
+            "ServiceID": req.service_id,
+            "ToDate": _norm_date(req.to_date or req.date),
+        }
+    }
+    enc_data, _key = encrypt_rawdah(inner)
+    res = nusuk_http_request(
+        "rawdah/v2/availableSlotDays",
+        method="POST",
+        body_dict={"data": enc_data},
+        bearer_token=token_info["token"],
+        device_id=req.device_id,
+        lang=req.lang,
+    )
+    if _nusuk_is_session_error(res.get("data")) and req.email and req.password:
+        _nusuk_drop_cached_token(req.email)
+        retry_token = resolve_nusuk_bearer_token(
+            bearer_token=None, email=req.email, password=req.password, otp=req.otp,
+            otp_email=req.otp_email, otp_app_password=req.otp_app_password,
+            otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+        )
+        if retry_token.get("ok"):
+            token_info = retry_token
+            res = nusuk_http_request(
+                "rawdah/v2/availableSlotDays",
+                method="POST",
+                body_dict={"data": enc_data},
+                bearer_token=token_info["token"],
+                device_id=req.device_id,
+                lang=req.lang,
+            )
+
+    upstream = res.get("data")
+    summary = summarize_rawdah_slots(upstream)
+    env = _nusuk_envelope(upstream)
+    log.info("📅 availableSlotDays: dates=%s | slots=%s | code=%s",
+             len(summary["dates"]), summary["total_slots"],
+             env.get("ResponseCode", env.get("responseCode")))
+    try:
+        log.info("📅 رد availableSlotDays: %s", json.dumps(upstream, ensure_ascii=False)[:500])
+    except Exception:
+        pass
+
+    return {
+        "success": res["ok"],
+        **summary,
+        "response_code": env.get("ResponseCode", env.get("responseCode")),
+        "response_desc": env.get("ResponseDesc", env.get("responseDesc")),
+        "error_hint": nusuk_error_hint(upstream),
+        "http_status": res.get("http_status"),
+        "token_source": token_info.get("source"),
+        "used_user_id": token_info.get("user_id"),
+        "sent_request": inner,
+        "data": upstream,
+    }
+
+
+class RawdahIssueRequest(BaseModel):
+    timeslot_ids: List[str]
+    count: int = 1
+    service_id: int = 20
+    assembly_point_id: int = 20
+    is_instant: bool = False
+    issue_rawda_permit: Optional[str] = None     # "1" عادي / "3" فوري
+    user_type: Optional[str] = None              # citizen_resident | external_visitor
+    latitude: str = "24.4672"
+    longitude: str = "39.6111"
+    location_desc: str = ""
+    family_friends_ids: List[int] = []
+    relatives_ids: List[int] = []
+    muatamer_list: List[dict] = []
+    user_identification: Optional[int] = None
+    bearer_token: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    otp: Optional[str] = None
+    otp_email: Optional[str] = None
+    otp_app_password: Optional[str] = None
+    otp_timeout: int = 90
+    device_id: Optional[str] = None
+    lang: str = "ar"
+
+
+@app.post("/api/rawdah/issue-permit")
+def rawdah_issue_permit_api(req: RawdahIssueRequest):
+    """إرسال طلب حجز تصريح روضة (issuePermit: instant-track / citizen-resident / external-visitor)."""
+    token_info = resolve_nusuk_bearer_token(
+        bearer_token=req.bearer_token, email=req.email, password=req.password, otp=req.otp,
+        otp_email=req.otp_email, otp_app_password=req.otp_app_password,
+        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+    )
+    if not token_info.get("ok"):
+        return {"success": False, "stage": token_info.get("stage"),
+                "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
+
+    uid = req.user_identification or token_info.get("user_id")
+    if uid is None:
+        uid = _nusuk_user_id_from_jwt(token_info.get("token"))
+    identification = uid if uid is not None else -1
+
+    is_instant = bool(req.is_instant)
+    issue_flag = req.issue_rawda_permit or ("3" if is_instant else "1")
+    if is_instant:
+        candidates = ["rawdah/v2/issuePermit/instant-track"]
+    elif req.user_type:
+        ut = req.user_type.strip().lower()
+        candidates = ["rawdah/v2/issuePermit/citizen-resident" if "citizen" in ut
+                      else "rawdah/v2/issuePermit/external-visitor"]
+    else:
+        candidates = ["rawdah/v2/issuePermit/citizen-resident", "rawdah/v2/issuePermit/external-visitor"]
+
+    inner = {
+        "AssemblyPointID": req.assembly_point_id,
+        "Count": req.count,
+        "FamilyAndFriendsIDS": req.family_friends_ids or [],
+        "IssueRawdaPermit": issue_flag,
+        "MainUserDeviceID": req.device_id or NUSUK_DEVICE_ID,
+        "MainUserIdentification": identification,
+        "MainUserLatitude": req.latitude,
+        "MainUserLocationDesc": req.location_desc or "",
+        "MainUserLongitude": req.longitude,
+        "MuatamerList": req.muatamer_list or [],
+        "RelativesIDS": req.relatives_ids or [],
+        "ServiceID": req.service_id,
+        "TimeslotID": [str(x) for x in (req.timeslot_ids or [])],
+        "WaitingListRequestId": 0,
+    }
+
+    attempts = []
+    res = None
+    used_endpoint = None
+    for ep_try in candidates:
+        log.info("🎫 إرسال حجز على %s ...", ep_try)
+        res = nusuk_http_request(
+            ep_try, method="POST", body_dict={"Request": inner},
+            bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
+        )
+        env = _nusuk_envelope(res.get("data"))
+        code = env.get("ResponseCode", env.get("responseCode"))
+        attempt = {"endpoint": ep_try, "http_status": res.get("http_status"), "code": code,
+                   "desc": env.get("ResponseDesc", env.get("responseDesc"))}
+        attempts.append(attempt)
+        try:
+            log.info("🎫 [%s] code=%s | %s", ep_try, code, json.dumps(res.get("data"), ensure_ascii=False)[:500])
+        except Exception:
+            pass
+        if _nusuk_is_session_error(res.get("data")):
+            continue
+        if code in (200, "200", 0, "0") or nusuk_extract_permit_ids(res.get("data")):
+            used_endpoint = ep_try
+            break
+        used_endpoint = ep_try
+
+    upstream = res.get("data") if res else None
+    env = _nusuk_envelope(upstream)
+    permit_ids = nusuk_extract_permit_ids(upstream)
+    return {
+        "success": bool(res and res.get("ok")),
+        "endpoint": used_endpoint,
+        "attempts": attempts,
+        "permit_ids": permit_ids,
+        "response_code": env.get("ResponseCode", env.get("responseCode")),
+        "response_desc": env.get("ResponseDesc", env.get("responseDesc")),
+        "error_hint": nusuk_error_hint(upstream),
+        "http_status": res.get("http_status") if res else None,
+        "used_user_id": uid,
+        "sent_request": inner,
+        "data": upstream,
+    }
+
+
+class RawdahConfirmRequest(BaseModel):
+    permit_ids: List[str]
+    bearer_token: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    otp: Optional[str] = None
+    otp_email: Optional[str] = None
+    otp_app_password: Optional[str] = None
+    otp_timeout: int = 90
+    device_id: Optional[str] = None
+    lang: str = "ar"
+
+
+@app.post("/api/rawdah/confirm-permit")
+def rawdah_confirm_permit_api(req: RawdahConfirmRequest):
+    """تأكيد التصاريح بعد الحجز (rawdah/v2/confirmPermit — {PermitsIds})."""
+    token_info = resolve_nusuk_bearer_token(
+        bearer_token=req.bearer_token, email=req.email, password=req.password, otp=req.otp,
+        otp_email=req.otp_email, otp_app_password=req.otp_app_password,
+        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+    )
+    if not token_info.get("ok"):
+        return {"success": False, "stage": token_info.get("stage"),
+                "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
+
+    ids = []
+    for pid in (req.permit_ids or []):
+        ids.append(int(pid) if str(pid).strip().isdigit() else pid)
+    inner = {"PermitsIds": ids}
+    log.info("✅ تأكيد التصاريح: %s", ids)
+    res = nusuk_http_request(
+        "rawdah/v2/confirmPermit", method="POST", body_dict={"Request": inner},
+        bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
+    )
+    env = _nusuk_envelope(res.get("data"))
+    try:
+        log.info("✅ رد confirmPermit: %s", json.dumps(res.get("data"), ensure_ascii=False)[:500])
+    except Exception:
+        pass
+    return {
+        "success": bool(res.get("ok")),
+        "response_code": env.get("ResponseCode", env.get("responseCode")),
+        "response_desc": env.get("ResponseDesc", env.get("responseDesc")),
+        "error_hint": nusuk_error_hint(res.get("data")),
+        "http_status": res.get("http_status"),
+        "sent_request": inner,
+        "data": res.get("data"),
     }
 
 
