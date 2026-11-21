@@ -731,6 +731,48 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
+                            <label class="block text-[11px] text-slate-300 font-bold mb-1">إيميل حساب نسك (دخول تلقائي)</label>
+                            <div class="sleek-input-wrap">
+                                <input id="v6CpEmail" type="email" dir="ltr" autocomplete="off" placeholder="you@mail.com" oninput="v6CpOnAuthChange()" class="sleek-input text-left font-mono">
+                                <i class="fa-solid fa-envelope sleek-input-icon"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-300 font-bold mb-1">باسورد حساب نسك</label>
+                            <div class="sleek-input-wrap">
+                                <input id="v6CpPassword" type="password" dir="ltr" autocomplete="off" placeholder="••••••••" oninput="v6CpOnAuthChange()" class="sleek-input text-left font-mono pl-9">
+                                <i class="fa-solid fa-lock sleek-input-icon"></i>
+                                <button type="button" onclick="v6CpTogglePassVisibility()" class="absolute left-3 text-slate-400 hover:text-amber-400 text-xs">
+                                    <i id="v6CpPassEyeIcon" class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] text-slate-300 font-bold mb-1">كود OTP (اختياري)</label>
+                            <div class="sleek-input-wrap">
+                                <input id="v6CpOtp" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="1234" oninput="v6CpOnAuthChange()" class="sleek-input text-left font-mono">
+                                <i class="fa-solid fa-keyboard sleek-input-icon"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-300 font-bold mb-1">مصدر الـ OTP</label>
+                            <select id="v6CpOtpEmail" onchange="v6CpOnAuthChange()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
+                                <option value="">يدوي (اكتبه في الخانة)</option>
+                                <option value="gmail">قراءة تلقائية من Gmail (بيانات مركز الـ OTP الجانبي)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="button" id="v6CpGetTokenBtn" onclick="v6CpFetchToken()" class="w-full py-2.5 rounded-xl emerald-gradient-btn text-white font-black text-xs transition flex items-center justify-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-bolt"></i> جلب الـ Bearer Token تلقائياً (من غير محاكي)
+                    </button>
+                    <div id="v6CpTokenStatus" class="hidden text-[11px] rounded-lg px-3 py-2 border"></div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
                             <label class="block text-[11px] text-slate-300 font-bold mb-1">Device ID (اختياري)</label>
                             <div class="sleek-input-wrap">
                                 <input id="v6CpDeviceId" type="text" dir="ltr" autocomplete="off" placeholder="device-id-..." oninput="v6CpOnAuthChange()" class="sleek-input text-left font-mono">
@@ -797,6 +839,9 @@
                             </div>
                             <textarea id="v6CpPermitIds" dir="ltr" rows="3" placeholder="111222, 333444" oninput="v6CpUpdatePreview()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl p-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-400"></textarea>
                         </div>
+                        <button type="button" id="v6CpFetchPermitsBtn" onclick="v6CpFetchPermits()" class="w-full py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/30 text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-cloud-arrow-down"></i> جلب تصاريح الروضة من reservation_id (يملأ permit_ids تلقائياً)
+                        </button>
                         <div>
                             <label class="block text-[11px] text-slate-300 font-bold mb-1">cancel_reason_id (رقم اختياري)</label>
                             <input id="v6CpCancelReasonId" type="number" step="1" dir="ltr" placeholder="1" oninput="v6CpUpdatePreview()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400">
@@ -2700,6 +2745,8 @@
         var V6_CP_HIST_KEY = "nusuk_cancel_permit_history_v1";
         var v6CpInputMode = "quick";
         var v6CpTokenVisible = false;
+        var v6CpPassVisible = false;
+        var v6CpTokenFetching = false;
         var v6CpExtraOpen = false;
         var v6CpLoading = false;
         var v6CpLastResult = null;
@@ -2753,12 +2800,25 @@
         function v6CpBuildState(forPreview) {
             var rawToken = (document.getElementById("v6CpBearerToken")?.value || "").trim();
             var rawDevice = (document.getElementById("v6CpDeviceId")?.value || "").trim();
+            var rawEmail = (document.getElementById("v6CpEmail")?.value || "").trim();
+            var rawPass = (document.getElementById("v6CpPassword")?.value || "").trim();
+            var rawOtp = (document.getElementById("v6CpOtp")?.value || "").trim();
+            var otpMode = document.getElementById("v6CpOtpEmail")?.value === "gmail" ? "gmail" : "";
+            var otpEmail = null, otpAppPass = null;
+            if (otpMode === "gmail") {
+                otpEmail = (document.getElementById("clientEmail")?.value || "").trim();
+                otpAppPass = (document.getElementById("clientPass")?.value || "").replace(/\s+/g, "");
+            }
             var lang = document.getElementById("v6CpLang")?.value === "en" ? "en" : "ar";
             var service = document.getElementById("v6CpService")?.value === "reservations" ? "reservations" : "rawdah";
             var encryptBody = Boolean(document.getElementById("v6CpEncryptBody")?.checked);
             var extraParsed = v6CpParseJsonObj(document.getElementById("v6CpExtraHeaders")?.value || "");
             var errors = {};
-            if (!rawToken) errors.bearer = "Bearer Token مطلوب";
+            var hasLogin = Boolean(rawEmail && rawPass);
+            if (!rawToken && !hasLogin) errors.bearer = "اكتب Bearer Token أو إيميل + باسورد نسك (للدخول التلقائي)";
+            if (rawEmail && !rawPass) errors.email = "اكتب باسورد نسك";
+            if (!rawEmail && rawPass) errors.email = "اكتب إيميل نسك";
+            if (otpMode === "gmail" && (!otpEmail || !otpAppPass)) errors.otp = "بيانات Gmail في مركز الـ OTP الجانبي ناقصة";
             if (!extraParsed.ok) errors.extra_headers = extraParsed.error;
 
             var reservationId = null, permitIds = null, cancelReasonId = null, payloadObj = null;
@@ -2772,7 +2832,7 @@
                     if (!Number.isFinite(n)) errors.cancel_reason_id = "يجب أن يكون رقماً صحيحاً";
                     else cancelReasonId = n;
                 }
-                if (!reservationId && !permitIds) errors.quick = "يرجى إدخال reservation_id أو permit_ids على الأقل";
+                if (!permitIds) errors.quick = "يرجى إدخال permit_ids (أو استخدم JSON مخصص) — الإلغاء بياخد IDs التصاريح";
             } else {
                 var cp = v6CpParseJsonObj(document.getElementById("v6CpCustomPayload")?.value || "");
                 if (cp.empty) errors.custom_payload = "يرجى إدخال JSON payload صالح";
@@ -2787,6 +2847,12 @@
                 extraParsed: extraParsed,
                 body: {
                     bearer_token: dispToken,
+                    email: rawEmail || null,
+                    password: rawPass || null,
+                    otp: rawOtp || null,
+                    otp_email: otpEmail,
+                    otp_app_password: otpAppPass,
+                    otp_timeout: 90,
                     service: service,
                     reservation_id: reservationId,
                     permit_ids: permitIds,
@@ -2804,6 +2870,10 @@
             try {
                 localStorage.setItem(V6_CP_AUTH_KEY, JSON.stringify({
                     bearer_token: document.getElementById("v6CpBearerToken")?.value || "",
+                    email: document.getElementById("v6CpEmail")?.value || "",
+                    password: document.getElementById("v6CpPassword")?.value || "",
+                    otp: document.getElementById("v6CpOtp")?.value || "",
+                    otp_email: document.getElementById("v6CpOtpEmail")?.value || "",
                     device_id: document.getElementById("v6CpDeviceId")?.value || "",
                     lang: document.getElementById("v6CpLang")?.value || "ar",
                     extra_headers: document.getElementById("v6CpExtraHeaders")?.value || "",
@@ -2821,6 +2891,158 @@
             inp.type = v6CpTokenVisible ? "text" : "password";
             if (ico) ico.className = v6CpTokenVisible ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
             v6CpUpdatePreview(false);
+        }
+
+        function v6CpTogglePassVisibility() {
+            var inp = document.getElementById("v6CpPassword");
+            var ico = document.getElementById("v6CpPassEyeIcon");
+            if (!inp) return;
+            v6CpPassVisible = !v6CpPassVisible;
+            inp.type = v6CpPassVisible ? "text" : "password";
+            if (ico) ico.className = v6CpPassVisible ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+        }
+
+        function v6CpTokenStatus(msg, isError) {
+            var el = document.getElementById("v6CpTokenStatus");
+            if (!el) return;
+            el.classList.remove("hidden");
+            el.textContent = msg;
+            el.className = "text-[11px] rounded-lg px-3 py-2 border " + (isError
+                ? "bg-red-500/15 border-red-500/40 text-red-300"
+                : "bg-emerald-500/15 border-emerald-500/40 text-emerald-300");
+        }
+
+        async function v6CpFetchToken() {
+            if (v6CpTokenFetching) return;
+            var email = (document.getElementById("v6CpEmail")?.value || "").trim();
+            var pass = (document.getElementById("v6CpPassword")?.value || "").trim();
+            var otp = (document.getElementById("v6CpOtp")?.value || "").trim();
+            if (!email || !pass) { v6CpTokenStatus("اكتب إيميل + باسورد حساب نسك الأول", true); return; }
+
+            var body = {
+                email: email,
+                password: pass,
+                use_cache: true,
+                lang: document.getElementById("v6CpLang")?.value === "en" ? "en" : "ar"
+            };
+            var dev = (document.getElementById("v6CpDeviceId")?.value || "").trim();
+            if (dev) body.device_id = dev;
+            if (otp) body.otp = otp;
+            if (document.getElementById("v6CpOtpEmail")?.value === "gmail") {
+                body.otp_email = (document.getElementById("clientEmail")?.value || "").trim();
+                body.otp_app_password = (document.getElementById("clientPass")?.value || "").replace(/\s+/g, "");
+                if (!body.otp_email || !body.otp_app_password) {
+                    v6CpTokenStatus("املأ Gmail + App Password في مركز الـ OTP الجانبي الأول", true);
+                    return;
+                }
+                body.otp_timeout = 90;
+            }
+
+            v6CpTokenFetching = true;
+            var btn = document.getElementById("v6CpGetTokenBtn");
+            var oldHtml = btn ? btn.innerHTML : "";
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري الدخول وجلب التوكن...';
+            v6CpTokenStatus("جاري تسجيل الدخول (v2/login → OTP → validate-otp)...", false);
+            try {
+                var res = await fetch((typeof API_BASE !== "undefined" && API_BASE ? API_BASE : "http://127.0.0.1:8000") + "/api/nusuk/token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                var data = await res.json().catch(function(){ return null; });
+                if (data && data.success && data.token) {
+                    var tok = document.getElementById("v6CpBearerToken");
+                    if (tok) tok.value = data.token;
+                    v6CpOnAuthChange();
+                    v6CpTokenStatus("✓ تم جلب التوكن" + (data.cached ? " (من الكاش)" : "") + " — جاهز للإرسال", false);
+                    showToast("تم جلب الـ Bearer Token بنجاح");
+                    playTone(880, 0.18);
+                } else {
+                    var msg = (data && (data.error || data.response_desc)) || "فشل جلب التوكن";
+                    if (data && data.stage === "otp" && data.otp_id) {
+                        msg = "تم إرسال كود OTP على البريد — اكتبه في خانة الكود واضغط (جلب التوكن) مرة أخرى. otp_id=" + data.otp_id;
+                    }
+                    v6CpTokenStatus(msg, true);
+                    showToast(msg, true);
+                }
+            } catch (err) {
+                v6CpTokenStatus("تعذر الاتصال بالسيرفر: " + (err && err.message ? err.message : String(err)), true);
+            } finally {
+                v6CpTokenFetching = false;
+                if (btn) btn.innerHTML = oldHtml;
+            }
+        }
+
+        function v6CpCollectPermitIds(data) {
+            var ids = [];
+            var seen = {};
+            function walk(node, depth) {
+                if (!node || depth > 8) return;
+                if (Array.isArray(node)) { node.forEach(function(it){ walk(it, depth + 1); }); return; }
+                if (typeof node === "object") {
+                    for (var k in node) {
+                        if (!node.hasOwnProperty(k)) continue;
+                        var key = String(k).toLowerCase().replace(/[^a-z]/g, "");
+                        var v = node[k];
+                        if (key === "permitid" || key === "permit" || key === "id" || key === "permitids") {
+                            if (typeof v === "number") { if (!seen[v]) { seen[v] = 1; ids.push(String(v)); } }
+                            else if (typeof v === "string" && /^\d+$/.test(String(v).trim())) { var n = String(v).trim(); if (!seen[n]) { seen[n] = 1; ids.push(n); } }
+                            else walk(v, depth + 1);
+                        } else {
+                            walk(v, depth + 1);
+                        }
+                    }
+                }
+            }
+            walk(data, 0);
+            return ids;
+        }
+
+        async function v6CpFetchPermits() {
+            var resId = (document.getElementById("v6CpReservationId")?.value || "").trim();
+            if (!resId || !/^\d+$/.test(resId)) { showToast("اكتب reservation_id رقمي صحيح الأول", true); return; }
+            var st = v6CpBuildState(false);
+            var body = {
+                reservation_id: parseInt(resId, 10),
+                lang: st.body.lang,
+                device_id: st.body.device_id || null
+            };
+            if (st.body.bearer_token) {
+                body.bearer_token = st.body.bearer_token;
+            } else {
+                body.email = st.body.email; body.password = st.body.password;
+                if (st.body.otp) body.otp = st.body.otp;
+                if (st.body.otp_email) { body.otp_email = st.body.otp_email; body.otp_app_password = st.body.otp_app_password; body.otp_timeout = 90; }
+            }
+            var btn = document.getElementById("v6CpFetchPermitsBtn");
+            var oldHtml = btn ? btn.innerHTML : "";
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري الجلب...'; }
+            try {
+                var res = await fetch((typeof API_BASE !== "undefined" && API_BASE ? API_BASE : "http://127.0.0.1:8000") + "/api/rawdah/permits", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                var data = await res.json().catch(function(){ return null; });
+                if (data && data.success) {
+                    var ids = v6CpCollectPermitIds(data.data);
+                    if (!ids.length) ids = v6CpCollectPermitIds(data);
+                    if (ids.length) {
+                        var ta = document.getElementById("v6CpPermitIds");
+                        if (ta) ta.value = ids.join(", ");
+                        v6CpUpdatePreview(false);
+                        showToast("تم جلب " + ids.length + " تصريح وملء permit_ids");
+                    } else {
+                        showToast("الرد رجع من غير أرقام تصاريح واضحة — شوف نتيجة السيرفر", true);
+                    }
+                } else {
+                    showToast((data && (data.error || data.response_desc)) || "فشل جلب التصاريح", true);
+                }
+            } catch (err) {
+                showToast("تعذر الاتصال بالسيرفر: " + (err && err.message ? err.message : String(err)), true);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = oldHtml; }
+            }
         }
 
         function v6CpToggleExtraHeaders(force) {
@@ -2863,7 +3085,7 @@
             if (pCnt) pCnt.textContent = String(Array.isArray(st.body.permit_ids) ? st.body.permit_ids.length : 0);
             if (exBadge) exBadge.textContent = st.extraParsed.empty ? "فارغ" : (st.extraParsed.ok ? "صالح ✓" : "خطأ JSON");
             v6CpShowErr("v6CpExtraHeadersErr", st.extraParsed.ok ? "" : st.extraParsed.error);
-            v6CpShowErr("v6CpBearerErr", showReq ? (st.errors.bearer || "") : "");
+            v6CpShowErr("v6CpBearerErr", showReq ? (st.errors.bearer || st.errors.email || st.errors.otp || "") : "");
             if (v6CpInputMode === "custom") {
                 var cp = v6CpParseJsonObj(document.getElementById("v6CpCustomPayload")?.value || "");
                 if (cBadge) cBadge.textContent = cp.empty ? "بانتظار الإدخال" : (cp.ok ? "JSON صالح ✓" : "خطأ JSON");
@@ -2887,7 +3109,7 @@
             v6CpUpdatePreview(true);
             var st = v6CpBuildState(false);
             if (!st.valid) {
-                var msg = st.errors.bearer || st.errors.extra_headers || st.errors.cancel_reason_id || st.errors.quick || st.errors.custom_payload || "يرجى مراجعة الحقول";
+                var msg = st.errors.bearer || st.errors.email || st.errors.otp || st.errors.extra_headers || st.errors.cancel_reason_id || st.errors.quick || st.errors.custom_payload || "يرجى مراجعة الحقول";
                 showToast(msg, true);
                 return;
             }
@@ -3040,6 +3262,10 @@
                 var saved = JSON.parse(localStorage.getItem(V6_CP_AUTH_KEY) || "null");
                 if (saved && typeof saved === "object") {
                     if (saved.bearer_token) document.getElementById("v6CpBearerToken").value = saved.bearer_token;
+                    if (saved.email) document.getElementById("v6CpEmail").value = saved.email;
+                    if (saved.password) document.getElementById("v6CpPassword").value = saved.password;
+                    if (saved.otp) document.getElementById("v6CpOtp").value = saved.otp;
+                    if (saved.otp_email === "gmail") document.getElementById("v6CpOtpEmail").value = "gmail";
                     if (saved.device_id) document.getElementById("v6CpDeviceId").value = saved.device_id;
                     if (saved.lang === "ar" || saved.lang === "en") document.getElementById("v6CpLang").value = saved.lang;
                     if (saved.extra_headers) document.getElementById("v6CpExtraHeaders").value = saved.extra_headers;
