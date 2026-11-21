@@ -2330,6 +2330,7 @@ def _nusuk_pick_user_id(data) -> Optional[int]:
 _NUSUK_ERROR_HINTS = {
     "10017026": "التصريح مستخدم من قبل ولا يمكن إلغاؤه",
     "-1010106002": "التصريح مستخدم من قبل ولا يمكن إلغاؤه",
+    "1010106041": "لا توجد سعة كافية في هذا الموعد حاليًا — جرّب موعدًا آخر أو وقتًا لاحقًا",
     "113": "تعذر معالجة الطلب — بيانات غير مكتملة أو غير صحيحة",
     "-9999": "خطأ عام من نسك — راجع UserID ورقم الحجز",
     "1": "بيانات الطلب غير صحيحة أو غير مكتملة",
@@ -3268,54 +3269,84 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
         except ValueError:
             return iso
 
-    service_ids = [req.service_id]
-    if 1 not in service_ids:
-        service_ids.append(1)
-    variants = []
-    for svc in service_ids:
-        for fmt in ("iso", "dmy"):
-            variants.append({
-                "service_id": svc,
-                "date_format": fmt,
-                "inner": {"Request": {
-                    "Count": req.count,
-                    "Date": d_iso if fmt == "iso" else _fmt_dmy(d_iso),
-                    "DateType": req.date_type,
-                    "Location": {"Latitude": lat, "Longitude": lng},
-                    "QueueType": req.queue_type,
-                    "ServiceID": svc,
-                    "ToDate": t_iso if fmt == "iso" else _fmt_dmy(t_iso),
-                }},
-            })
+    # أيام النطاق (dd/MM/yyyy)
+    days: List[str] = []
+    try:
+        d_start = datetime.strptime(d_iso, "%Y-%m-%d")
+        d_end = datetime.strptime(t_iso, "%Y-%m-%d")
+        if d_end < d_start:
+            d_start, d_end = d_end, d_start
+        cur = d_start
+        while cur <= d_end and len(days) < 31:
+            days.append(cur.strftime("%d/%m/%Y"))
+            cur += timedelta(days=1)
+    except ValueError:
+        days = [_fmt_dmy(d_iso)]
+
+    def _build_inner(date_value: str, to_value: str, date_type: int) -> dict:
+        return {"Request": {
+            "Count": req.count,
+            "Date": date_value,
+            "DateType": date_type,
+            "Location": {"Latitude": lat, "Longitude": lng},
+            "QueueType": req.queue_type,
+            "ServiceID": req.service_id,
+            "ToDate": to_value,
+        }}
+
+    def _call(inner: dict) -> dict:
+        enc, _k = encrypt_rawdah(inner)
+        return nusuk_http_request(
+            "rawdah/v2/availableSlotDays", method="POST", body_dict={"data": enc},
+            bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
+        )
+
+    plans = [
+        ("range-t%d" % req.date_type,
+         _build_inner(_fmt_dmy(d_iso), _fmt_dmy(t_iso), req.date_type),
+         [_build_inner(_fmt_dmy(d_iso), _fmt_dmy(t_iso), req.date_type)]),
+    ]
+    if req.date_type != 2:
+        plans.append(("range-t2",
+                      _build_inner(_fmt_dmy(d_iso), _fmt_dmy(t_iso), 2),
+                      [_build_inner(_fmt_dmy(d_iso), _fmt_dmy(t_iso), 2)]))
+    for dt in sorted({1, req.date_type, 2}):
+        plans.append(("per-day-t%d" % dt,
+                      _build_inner(days[0], days[0], dt),
+                      [_build_inner(day, day, dt) for day in days]))
 
     res = None
-    used_variant = variants[0]
     attempts = []
-    for v in variants:
-        enc_data, _key = encrypt_rawdah(v["inner"])
-        res_try = nusuk_http_request(
-            "rawdah/v2/availableSlotDays",
-            method="POST",
-            body_dict={"data": enc_data},
-            bearer_token=token_info["token"],
-            device_id=req.device_id,
-            lang=req.lang,
-        )
-        code_try = _nusuk_response_code(res_try.get("data"))
-        slots_try = summarize_rawdah_slots(res_try.get("data"))["total_slots"]
-        attempts.append({"service_id": v["service_id"], "date_format": v["date_format"],
-                         "code": code_try, "slots": slots_try})
-        res = res_try
-        used_variant = v
+    merged_dates = []
+    used_variant = {"service_id": req.service_id, "date_format": "dmy",
+                    "inner": _build_inner(_fmt_dmy(d_iso), _fmt_dmy(t_iso), req.date_type)}
+    for label, first_inner, inners in plans:
+        total = 0
+        collected = []
+        last = None
+        for inner in inners:
+            last = _call(inner)
+            if _nusuk_is_session_error(last.get("data")):
+                break
+            s_try = summarize_rawdah_slots(last.get("data"))
+            if s_try["dates"]:
+                collected.extend(s_try["dates"])
+                total += s_try["total_slots"]
+            if label.startswith("range") and total:
+                break
+        code_last = _nusuk_response_code(last.get("data")) if last else None
+        attempts.append({"strategy": label, "calls": len(inners), "code": code_last, "slots": total})
         try:
-            log.info("📅 محاولة Slots: service=%s fmt=%s → code=%s slots=%s",
-                     v["service_id"], v["date_format"], code_try, slots_try)
+            log.info("📅 محاولة Slots: %s (calls=%s) → code=%s slots=%s", label, len(inners), code_last, total)
         except Exception:
             pass
-        if _nusuk_is_session_error(res_try.get("data")):
+        res = last
+        used_variant = {"service_id": req.service_id, "date_format": "dmy", "inner": first_inner}
+        if total:
+            merged_dates = collected
             break
-        if code_try in (200, "200") or slots_try:
-            break
+        if last is None:
+            continue
 
     if res is not None and _nusuk_is_session_error(res.get("data")) and req.email and req.password:
         _nusuk_drop_cached_token(req.email)
@@ -3326,15 +3357,12 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
         )
         if retry_token.get("ok"):
             token_info = retry_token
-            enc_data, _key = encrypt_rawdah(used_variant["inner"])
-            res = nusuk_http_request(
-                "rawdah/v2/availableSlotDays",
-                method="POST",
-                body_dict={"data": enc_data},
-                bearer_token=token_info["token"],
-                device_id=req.device_id,
-                lang=req.lang,
-            )
+            res = _call(used_variant["inner"])
+
+    if res is None:
+        return {"success": False, "stage": "request", "dates": [], "total_slots": 0,
+                "error": "تعذر إرسال طلب المواعيد — جرّب تاني",
+                "error_hint": "تعذر إرسال طلب المواعيد — جرّب تاني"}
 
     if _nusuk_is_session_error(res.get("data")):
         return {
@@ -3355,6 +3383,12 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
 
     upstream = res.get("data")
     summary = summarize_rawdah_slots(upstream)
+    if merged_dates:
+        summary = {
+            "dates": merged_dates,
+            "total_slots": sum(len(x.get("slots") or []) for x in merged_dates),
+            "server_date_time": summary.get("server_date_time"),
+        }
     env = _nusuk_envelope(upstream)
     log.info("📅 availableSlotDays: dates=%s | slots=%s | code=%s",
              len(summary["dates"]), summary["total_slots"],
@@ -3453,29 +3487,38 @@ def rawdah_issue_permit_api(req: RawdahIssueRequest):
         "WaitingListRequestId": 0,
     }
 
+    service_variants = [req.service_id]
+    _other = 21 if req.service_id == 20 else 20
+    if _other not in service_variants:
+        service_variants.append(_other)
+
     def _run_candidates():
         results = []
-        for ep_try in candidates:
-            log.info("🎫 إرسال حجز على %s ...", ep_try)
-            res_try = nusuk_http_request(
-                ep_try, method="POST", body_dict={"Request": inner},
-                bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
-            )
-            env_try = _nusuk_envelope(res_try.get("data"))
-            code_try = env_try.get("ResponseCode", env_try.get("responseCode"))
-            results.append({
-                "endpoint": ep_try, "res": res_try, "code": code_try,
-                "desc": env_try.get("ResponseDesc", env_try.get("responseDesc")),
-                "session": _nusuk_is_session_error(res_try.get("data")),
-            })
-            try:
-                log.info("🎫 [%s] code=%s | %s", ep_try, code_try,
-                         json.dumps(res_try.get("data"), ensure_ascii=False)[:500])
-            except Exception:
-                pass
-            if not results[-1]["session"] and (
-                    code_try in (200, "200", 0, "0") or nusuk_extract_permit_ids(res_try.get("data"))):
-                break
+        for svc in service_variants:
+            for ep_try in candidates:
+                inner_try = dict(inner)
+                inner_try["ServiceID"] = svc
+                log.info("🎫 إرسال حجز على %s (ServiceID=%s) ...", ep_try, svc)
+                res_try = nusuk_http_request(
+                    ep_try, method="POST", body_dict={"Request": inner_try},
+                    bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
+                )
+                env_try = _nusuk_envelope(res_try.get("data"))
+                code_try = env_try.get("ResponseCode", env_try.get("responseCode"))
+                results.append({
+                    "endpoint": ep_try, "service_id": svc, "inner": inner_try,
+                    "res": res_try, "code": code_try,
+                    "desc": env_try.get("ResponseDesc", env_try.get("responseDesc")),
+                    "session": _nusuk_is_session_error(res_try.get("data")),
+                })
+                try:
+                    log.info("🎫 [%s] svc=%s code=%s | %s", ep_try, svc, code_try,
+                             json.dumps(res_try.get("data"), ensure_ascii=False)[:500])
+                except Exception:
+                    pass
+                if not results[-1]["session"] and (
+                        code_try in (200, "200", 0, "0") or nusuk_extract_permit_ids(res_try.get("data"))):
+                    return results
         return results
 
     results = _run_candidates()
@@ -3494,7 +3537,8 @@ def rawdah_issue_permit_api(req: RawdahIssueRequest):
     if results and all(r["session"] for r in results):
         return {
             "success": False, "stage": "session", "permit_ids": [],
-            "attempts": [{"endpoint": r["endpoint"], "code": r["code"], "desc": r["desc"]} for r in results],
+            "attempts": [{"endpoint": r["endpoint"], "service_id": r["service_id"],
+                          "code": r["code"], "desc": r["desc"]} for r in results],
             "response_code": results[-1]["code"],
             "response_desc": results[-1]["desc"],
             "error_hint": "انتهت الجلسة — اضغط زر (دخول وجلب التوكن) تاني واكتب OTP الجديد",
@@ -3516,7 +3560,9 @@ def rawdah_issue_permit_api(req: RawdahIssueRequest):
 
     res = chosen["res"] if chosen else None
     used_endpoint = chosen["endpoint"] if chosen else None
-    attempts = [{"endpoint": r["endpoint"], "http_status": r["res"].get("http_status"),
+    used_inner = chosen["inner"] if chosen else inner
+    attempts = [{"endpoint": r["endpoint"], "service_id": r["service_id"],
+                 "http_status": r["res"].get("http_status"),
                  "code": r["code"], "desc": r["desc"]} for r in results]
 
     upstream = res.get("data") if res else None
@@ -3532,7 +3578,7 @@ def rawdah_issue_permit_api(req: RawdahIssueRequest):
         "error_hint": nusuk_error_hint(upstream),
         "http_status": res.get("http_status") if res else None,
         "used_user_id": uid,
-        "sent_request": inner,
+        "sent_request": used_inner,
         "data": upstream,
     }
 
