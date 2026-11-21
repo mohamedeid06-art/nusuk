@@ -3251,27 +3251,73 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
         return {"success": False, "stage": token_info.get("stage"),
                 "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
 
-    inner = {
-        "Request": {
-            "Count": req.count,
-            "Date": _norm_date(req.date),
-            "DateType": req.date_type,
-            "Location": {"Latitude": req.latitude, "Longitude": req.longitude},
-            "QueueType": req.queue_type,
-            "ServiceID": req.service_id,
-            "ToDate": _norm_date(req.to_date or req.date),
-        }
-    }
-    enc_data, _key = encrypt_rawdah(inner)
-    res = nusuk_http_request(
-        "rawdah/v2/availableSlotDays",
-        method="POST",
-        body_dict={"data": enc_data},
-        bearer_token=token_info["token"],
-        device_id=req.device_id,
-        lang=req.lang,
-    )
-    if _nusuk_is_session_error(res.get("data")) and req.email and req.password:
+    def _to_float(v, default):
+        try:
+            return float(str(v).strip())
+        except (TypeError, ValueError):
+            return default
+
+    lat = _to_float(req.latitude, 24.4672)
+    lng = _to_float(req.longitude, 39.6111)
+    d_iso = _norm_date(req.date)
+    t_iso = _norm_date(req.to_date or req.date)
+
+    def _fmt_dmy(iso: str) -> str:
+        try:
+            return datetime.strptime(iso, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            return iso
+
+    service_ids = [req.service_id]
+    if 1 not in service_ids:
+        service_ids.append(1)
+    variants = []
+    for svc in service_ids:
+        for fmt in ("iso", "dmy"):
+            variants.append({
+                "service_id": svc,
+                "date_format": fmt,
+                "inner": {"Request": {
+                    "Count": req.count,
+                    "Date": d_iso if fmt == "iso" else _fmt_dmy(d_iso),
+                    "DateType": req.date_type,
+                    "Location": {"Latitude": lat, "Longitude": lng},
+                    "QueueType": req.queue_type,
+                    "ServiceID": svc,
+                    "ToDate": t_iso if fmt == "iso" else _fmt_dmy(t_iso),
+                }},
+            })
+
+    res = None
+    used_variant = variants[0]
+    attempts = []
+    for v in variants:
+        enc_data, _key = encrypt_rawdah(v["inner"])
+        res_try = nusuk_http_request(
+            "rawdah/v2/availableSlotDays",
+            method="POST",
+            body_dict={"data": enc_data},
+            bearer_token=token_info["token"],
+            device_id=req.device_id,
+            lang=req.lang,
+        )
+        code_try = _nusuk_response_code(res_try.get("data"))
+        slots_try = summarize_rawdah_slots(res_try.get("data"))["total_slots"]
+        attempts.append({"service_id": v["service_id"], "date_format": v["date_format"],
+                         "code": code_try, "slots": slots_try})
+        res = res_try
+        used_variant = v
+        try:
+            log.info("📅 محاولة Slots: service=%s fmt=%s → code=%s slots=%s",
+                     v["service_id"], v["date_format"], code_try, slots_try)
+        except Exception:
+            pass
+        if _nusuk_is_session_error(res_try.get("data")):
+            break
+        if code_try in (200, "200") or slots_try:
+            break
+
+    if res is not None and _nusuk_is_session_error(res.get("data")) and req.email and req.password:
         _nusuk_drop_cached_token(req.email)
         retry_token = resolve_nusuk_bearer_token(
             bearer_token=None, email=req.email, password=req.password, otp=req.otp,
@@ -3280,6 +3326,7 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
         )
         if retry_token.get("ok"):
             token_info = retry_token
+            enc_data, _key = encrypt_rawdah(used_variant["inner"])
             res = nusuk_http_request(
                 "rawdah/v2/availableSlotDays",
                 method="POST",
@@ -3326,7 +3373,10 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
         "http_status": res.get("http_status"),
         "token_source": token_info.get("source"),
         "used_user_id": token_info.get("user_id"),
-        "sent_request": inner,
+        "used_variant": {"service_id": used_variant["service_id"],
+                         "date_format": used_variant["date_format"]},
+        "attempts": attempts,
+        "sent_request": used_variant["inner"],
         "data": upstream,
     }
 
