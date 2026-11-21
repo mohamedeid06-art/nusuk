@@ -2312,6 +2312,21 @@ def _nusuk_is_session_error(payload) -> bool:
     return _nusuk_response_code(payload) in (-401, -403, 401, 403)
 
 
+def _nusuk_pick_user_id(data) -> Optional[int]:
+    """يستخرج UserID من بيانات الرد (نسك بيرجّعه بحروف UserID)."""
+    if not isinstance(data, dict):
+        return None
+    for key in ("UserID", "UserId", "userId", "userID", "User_ID"):
+        v = data.get(key)
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+            return int(v.strip())
+    return None
+
+
 def _nusuk_drop_cached_token(email: Optional[str]) -> None:
     if not email:
         return
@@ -2429,7 +2444,7 @@ def nusuk_api_verify_otp(email: str, password: str, otp: str, otp_id, device_id:
         "response_code": env.get("ResponseCode", env.get("responseCode")),
         "response_desc": env.get("ResponseDesc", env.get("responseDesc")),
         "token": token,
-        "user_id": data.get("userId", data.get("UserId")),
+        "user_id": _nusuk_pick_user_id(data),
         "data": data,
     }
     log.info("Nusuk v2/login/validate-otp → token=%s (HTTP %s)",
@@ -2451,9 +2466,10 @@ def _nusuk_cache_get(email: str) -> Optional[dict]:
     return item
 
 
-def _nusuk_cache_set(email: str, token: str, otp_id=None):
+def _nusuk_cache_set(email: str, token: str, otp_id=None, user_id=None):
     with _NUSUK_TOKEN_LOCK:
-        _NUSUK_TOKEN_CACHE[email] = {"token": token, "created_at": time.time(), "otp_id": otp_id}
+        _NUSUK_TOKEN_CACHE[email] = {"token": token, "created_at": time.time(),
+                                     "otp_id": otp_id, "user_id": user_id}
 
 
 def nusuk_api_fetch_token(email: str, password: str, otp: Optional[str] = None,
@@ -2471,7 +2487,7 @@ def nusuk_api_fetch_token(email: str, password: str, otp: Optional[str] = None,
         if cached:
             log.info("استخدام توكن نسك المخزّن مؤقتاً لـ %s", e)
             return {"ok": True, "token": cached["token"], "otp_id": cached.get("otp_id"),
-                    "stage": "cache", "cached": True}
+                    "user_id": cached.get("user_id"), "stage": "cache", "cached": True}
 
     t0 = time.time()
     step1 = nusuk_api_login(e, p, device_id=device_id, lang=lang)
@@ -2502,7 +2518,7 @@ def nusuk_api_fetch_token(email: str, password: str, otp: Optional[str] = None,
                 "response_code": step2.get("response_code"),
                 "data": step2.get("data")}
 
-    _nusuk_cache_set(e, step2["token"], otp_id=otp_id)
+    _nusuk_cache_set(e, step2["token"], otp_id=otp_id, user_id=step2.get("user_id"))
     return {"ok": True, "token": step2["token"], "otp_id": otp_id, "user_id": step2.get("user_id"),
             "stage": "validate-otp", "cached": False}
 
@@ -2521,7 +2537,8 @@ def resolve_nusuk_bearer_token(bearer_token: Optional[str] = None, email: Option
                                     device_id=device_id, lang=lang)
         if res.get("ok"):
             return {"ok": True, "token": res["token"], "source": res.get("stage"),
-                    "otp_id": res.get("otp_id"), "cached": res.get("cached", False)}
+                    "otp_id": res.get("otp_id"), "user_id": res.get("user_id"),
+                    "cached": res.get("cached", False)}
         return {"ok": False, "error": res.get("error"), "stage": res.get("stage")}
     return {"ok": False, "stage": "input",
             "error": "مطلوب bearer_token أو email + password (مع otp أو otp_email + otp_app_password)"}
@@ -2767,13 +2784,15 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         return {"success": False, "stage": token_info.get("stage"),
                 "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
 
-    inner: Dict[str, object] = {"ReservationId": req.reservation_id}
-    if req.user_id is not None:
-        inner["UserId"] = req.user_id
-    if req.is_notification_group:
-        inner["IsNotificationGroupId"] = True
-    if req.notification_group_id is not None:
-        inner["NotificationGroupId"] = req.notification_group_id
+    uid = req.user_id if req.user_id is not None else token_info.get("user_id")
+    inner: Dict[str, object] = {
+        "UserId": uid,
+        "ReservationId": req.reservation_id,
+        "IsNotificationGroupId": bool(req.is_notification_group),
+        "NotificationGroupId": req.notification_group_id,
+    }
+    if uid is None:
+        log.warning("⚠️ UserID غير معروف لهذا التوكن — لو رجع -9999 املأ خانة UserId يدويًا أو استخدم الدخول التلقائي")
 
     log.info("📋 جلب تصاريح الروضة للحجز %s (token_source=%s)...", req.reservation_id, token_info.get("source"))
     res = nusuk_http_request(
@@ -2830,6 +2849,8 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         "response_code": response_code,
         "response_desc": response_desc,
         "top_keys": top_keys,
+        "used_user_id": uid,
+        "user_id_missing": uid is None,
         "refreshed_token": refreshed,
         "token_source": token_info.get("source"),
         "otp_id": token_info.get("otp_id"),
