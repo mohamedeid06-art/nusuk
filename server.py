@@ -1,102 +1,32 @@
+import base64
 import copy
 import email
 import email.header
 import email.utils
+import hashlib
 import imaplib
 import json
 import logging
 import os
+import random
 import re
+import string
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
-
-def _ensure_runtime_dependencies():
-    import glob
-    import sys
-
-    try:
-        import uiautomator2  # noqa: F401
-        import fastapi  # noqa: F401
-        import uvicorn  # noqa: F401
-        return
-    except ImportError:
-        pass
-
-    if os.environ.get("NUSUK_REEXEC") != "1":
-        home = os.path.expanduser("~")
-        patterns = [
-            os.path.join(home, "AppData", "Local", "Programs", "Python", "Python*", "python.exe"),
-            os.path.join(home, "Desktop", "*", "Scripts", "python.exe"),
-            os.path.join(home, "*", "Scripts", "python.exe"),
-            os.path.join(home, "*venv*", "Scripts", "python.exe"),
-            os.path.join(home, "anaconda3", "python.exe"),
-            os.path.join(home, "miniconda3", "python.exe"),
-            r"C:\Python*\python.exe",
-            r"C:\Program Files\Python*\python.exe",
-        ]
-        seen = {os.path.normcase(os.path.abspath(sys.executable))}
-        for pat in patterns:
-            for cand in glob.glob(pat):
-                norm = os.path.normcase(os.path.abspath(cand))
-                if norm in seen or not os.path.isfile(cand):
-                    continue
-                seen.add(norm)
-                try:
-                    chk = subprocess.run(
-                        [cand, "-c", "import uiautomator2, fastapi, uvicorn"],
-                        capture_output=True,
-                        timeout=6,
-                    )
-                    if chk.returncode == 0:
-                        print(f"[✓] تحويل التشغيل تلقائياً إلى بيئة البايثون المكتملة: {cand}")
-                        env = os.environ.copy()
-                        env["NUSUK_REEXEC"] = "1"
-                        raise SystemExit(subprocess.call([cand, os.path.abspath(__file__), *sys.argv[1:]], env=env))
-                except SystemExit:
-                    raise
-                except Exception:
-                    pass
-
-    print("[⏳] جاري تثبيت المكتبات المطلوبة للسيرفر (uiautomator2, fastapi, uvicorn) لأول مرة...")
-    pacman_exe = r"C:\msys64\usr\bin\pacman.exe"
-    if "msys64" in sys.executable.lower() and os.path.isfile(pacman_exe):
-        subprocess.run(
-            [
-                pacman_exe,
-                "-S",
-                "--noconfirm",
-                "--needed",
-                "mingw-w64-ucrt-x86_64-python-pip",
-                "mingw-w64-ucrt-x86_64-python-fastapi",
-                "mingw-w64-ucrt-x86_64-python-uvicorn",
-                "mingw-w64-ucrt-x86_64-python-pydantic",
-                "mingw-w64-ucrt-x86_64-python-pillow",
-                "mingw-w64-ucrt-x86_64-python-lxml",
-                "mingw-w64-ucrt-x86_64-python-requests",
-            ]
-        )
-    else:
-        subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True)
-
-    pkgs = ["uiautomator2", "fastapi", "uvicorn", "pydantic"]
-    res = subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages", *pkgs])
-    if res.returncode != 0:
-        subprocess.run([sys.executable, "-m", "pip", "install", *pkgs])
-
-
-_ensure_runtime_dependencies()
 
 import uiautomator2 as u2
 from fastapi import FastAPI
@@ -165,12 +95,19 @@ LOGIN_MARKERS = [
 ]
 CREATE_MARKERS = ["أنشئ حسابًا جديدًا", "أنشئ حسابك", "Create", "Sign up", "Register"]
 ALREADY_KEYS = [
-    "مسجل", "مسجّل", "مسبق", "مسبقا", "مسبقاً", "مسبقًا",
-    "استعد حسابك", "باسم حساب آخر",
-    "already", "registered", "exists", "found",
+    "مسجل مسبق", "مسجّل مسبق", "مسجل باسم حساب", "مسجّل باسم حساب",
+    "سجل الخروج واستعد حسابك", "سجّل الخروج واستعد حسابك", "استعد حسابك",
+    "رقم الهوية مسجل", "رقم الهوية مسجّل", "مرتبط بحساب آخر",
+    "مسجل بالفعل", "موجود مسبق", "مسجلة مسبق", "لديك حساب",
+    "already registered", "already exists", "account already",
 ]
 SUCCESS_KEYS = ["exploring", "استكشاف", "نجاح"]
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+ARABIC_DIACRITICS_RE = re.compile(r"[\u064B-\u065F\u0670]")
+
+
+def strip_arabic_diacritics(text: str) -> str:
+    return ARABIC_DIACRITICS_RE.sub("", text or "")
 
 # ==========================================
 # Logging
@@ -200,7 +137,7 @@ _state_lock = threading.RLock()
 
 
 def _default_group() -> dict:
-    return {"leader_active": False, "leader_name": None, "leader_id": None, "leader_email": None, "companions": []}
+    return {"leader_active": False, "leader_name": None, "leader_id": None, "companions": []}
 
 
 def _default_state() -> dict:
@@ -280,95 +217,7 @@ def exclusive(wait: float = 0.0):
 
 
 class FlowError(Exception):
-    def __init__(self, message: str, screenshot: Optional[str] = None):
-        super().__init__(message)
-        self.screenshot = screenshot
-
-
-SCREEN_ERROR_MARKERS = (
-    "حدث خطأ",
-    "حدث خطا",
-    "خطأ غير متوقع",
-    "حصل خطأ",
-    "something went wrong",
-    "an error occurred",
-    "unexpected error",
-)
-
-
-def extract_screen_error_details(xml_str: str) -> Optional[str]:
-    low = xml_str.lower()
-    if not any(m in low for m in SCREEN_ERROR_MARKERS):
-        return None
-    try:
-        root = ET.fromstring(xml_str.encode("utf-8"))
-        texts = []
-        for node in root.iter():
-            if node.attrib.get("class") == "android.widget.EditText":
-                continue
-            t = (node.attrib.get("text") or "").strip()
-            if t and t not in texts and len(t) <= 180:
-                texts.append(t)
-        err_parts = [
-            t for t in texts
-            if any(k in t.lower() for k in ("خطأ", "خطا", "تعذر", "فشل", "غير صحيح", "غير صالح", "حاول", "error", "wrong", "invalid", "failed"))
-        ]
-        if err_parts:
-            return " — ".join(err_parts[:3])
-    except Exception:
-        pass
-    return "حدث خطأ في التطبيق"
-
-
-def _install_error_screenshot_hook(dev):
-    if getattr(dev, "_error_hook_installed", False):
-        return dev
-    orig_dump = dev.dump_hierarchy
-
-    def wrapped_dump(*args, **kwargs):
-        xml_str = orig_dump(*args, **kwargs)
-        try:
-            if isinstance(xml_str, str):
-                err_txt = extract_screen_error_details(xml_str)
-                if err_txt:
-                    now_t = time.time()
-                    last_t = getattr(dev, "_last_error_shot_time", 0.0)
-                    if now_t - last_t > 2.5 or not getattr(dev, "_last_captured_error_shot", None):
-                        shot = save_failure_artifacts(dev, "hadath_khata", xml_str=xml_str)
-                        dev._last_error_shot_time = now_t
-                        dev._last_captured_error_shot = shot
-                        dev._last_captured_error_text = err_txt
-                        log.warning(f"📸 [لقطة فورية] تم رصد ({err_txt}) على الشاشة والتقاط اسكرين شوت فوراً: {shot}")
-        except Exception:
-            pass
-        return xml_str
-
-    dev._orig_dump_hierarchy = orig_dump
-    dev.dump_hierarchy = wrapped_dump
-    dev._error_hook_installed = True
-    dev._last_captured_error_shot = None
-    dev._last_captured_error_text = None
-    dev._last_error_shot_time = 0.0
-    return dev
-
-
-def reset_device_error_capture(dev):
-    if dev is not None:
-        dev._last_captured_error_shot = None
-        dev._last_captured_error_text = None
-
-
-def raise_if_screen_has_error(dev, xml_str: Optional[str] = None):
-    if dev is None:
-        return
-    raw = xml_str if xml_str is not None else dev.dump_hierarchy()
-    low = raw.lower()
-    if any(k in low for k in ALREADY_KEYS):
-        return
-    if any(m in low for m in SCREEN_ERROR_MARKERS):
-        err_msg = getattr(dev, "_last_captured_error_text", None) or extract_screen_error_details(raw) or "حدث خطأ في التطبيق"
-        shot = getattr(dev, "_last_captured_error_shot", None) or save_failure_artifacts(dev, "hadath_khata", xml_str=raw)
-        raise FlowError(err_msg, screenshot=shot)
+    pass
 
 
 _devices_cache = {}
@@ -378,7 +227,7 @@ def get_device(serial: str, timeout: int = 120):
     if serial in _devices_cache:
         try:
             if _devices_cache[serial].info.get("screenOn") is not None:
-                return _install_error_screenshot_hook(_devices_cache[serial])
+                return _devices_cache[serial]
         except Exception:
             _devices_cache.pop(serial, None)
 
@@ -387,7 +236,6 @@ def get_device(serial: str, timeout: int = 120):
         try:
             dev = u2.connect(serial)
             if dev.info.get("screenOn") is not None:
-                dev = _install_error_screenshot_hook(dev)
                 _devices_cache[serial] = dev
                 return dev
         except Exception:
@@ -397,19 +245,15 @@ def get_device(serial: str, timeout: int = 120):
 
 
 def smart_sleep(base_seconds: float, mult: float = 1.0):
-    with _state_lock:
-        live_mult = float(STATE.get("speed_multiplier", mult) or mult)
-    time.sleep(max(0.08, base_seconds * live_mult))
+    time.sleep(max(0.1, base_seconds * mult))
 
 
-def wait_for_network_loading(dev, max_wait: float = 12.0, check_error: bool = False) -> bool:
+def wait_for_network_loading(dev, max_wait: float = 12.0) -> bool:
     start_t = time.time()
     time.sleep(0.25)
     while time.time() - start_t < max_wait:
         try:
             xml_str = dev.dump_hierarchy()
-            if check_error:
-                raise_if_screen_has_error(dev, xml_str)
             is_loading = (
                 "ProgressBar" in xml_str
                 or "جاري التحميل" in xml_str
@@ -419,8 +263,6 @@ def wait_for_network_loading(dev, max_wait: float = 12.0, check_error: bool = Fa
             )
             if not is_loading:
                 return True
-        except FlowError:
-            raise
         except Exception:
             pass
         time.sleep(0.6)
@@ -647,18 +489,9 @@ def bump_counter(emu_key: str):
 # ==========================================
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 AR_MONTHS = {
-    "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "ابريل": 4, "إبريل": 4, "مايو": 5,
-    "يونيو": 6, "يونيه": 6, "يوليو": 7, "يوليه": 7, "أغسطس": 8, "اغسطس": 8,
-    "سبتمبر": 9, "أكتوبر": 10, "اكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
+    "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "ابريل": 4, "مايو": 5, "يونيو": 6,
+    "يوليو": 7, "أغسطس": 8, "اغسطس": 8, "سبتمبر": 9, "أكتوبر": 10, "اكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
 }
-EN_MONTHS = {
-    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
-    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
-    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
-    "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
-}
-AR_DIACRITICS_RE = re.compile(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]")
-ARABIC_DIGITS_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 OTP_KEYWORDS = ["nusuk", "نسك", "verification", "رمز", "otp"]
 _used_otp_ids = set()
 
@@ -1025,20 +858,17 @@ def reopen_nusuk_app(dev, emu_key: str, mult: float = 1.0) -> bool:
         return False
 
 
-def save_failure_artifacts(dev, tag: str, xml_str: Optional[str] = None) -> Optional[str]:
+def save_failure_artifacts(dev, tag: str) -> Optional[str]:
     if dev is None:
         return None
     try:
         os.makedirs(SHOTS_DIR, exist_ok=True)
-        fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:19]}_{tag}"
+        fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{tag}"
         base = os.path.join(SHOTS_DIR, fname)
         dev.screenshot(base + ".png")
         try:
-            raw_xml = xml_str if xml_str is not None else (
-                dev._orig_dump_hierarchy() if hasattr(dev, "_orig_dump_hierarchy") else dev.dump_hierarchy()
-            )
             with open(base + ".xml", "w", encoding="utf-8") as f:
-                f.write(raw_xml)
+                f.write(dev.dump_hierarchy())
         except Exception:
             pass
         files = sorted(
@@ -1060,13 +890,13 @@ def save_failure_artifacts(dev, tag: str, xml_str: Optional[str] = None) -> Opti
 # استخراج بيانات الملف الشخصي + إدارة صفحة الأصدقاء
 # ==========================================
 def click_text_in_xml(dev, xml_str: str, targets: tuple, min_y: int = 0, max_y: int = 1920) -> bool:
-    """البحث عن نص داخل XML الملتقط والضغط على مركز العنصر فوراً بدون استدعاءات RPC إضافية"""
+    """البحث عن نص داخل XML الملتقط (مع تجاهل التشكيل والشدّة) والضغط على مركز العنصر فوراً بدون استدعاءات RPC إضافية"""
     try:
         root = ET.fromstring(xml_str.encode("utf-8"))
-        lowered_targets = [t.lower() for t in targets]
+        lowered_targets = [strip_arabic_diacritics(t).lower() for t in targets]
         for node in root.iter():
-            t = (node.attrib.get("text") or "").strip().lower()
-            d = (node.attrib.get("content-desc") or "").strip().lower()
+            t = strip_arabic_diacritics(node.attrib.get("text") or "").strip().lower()
+            d = strip_arabic_diacritics(node.attrib.get("content-desc") or "").strip().lower()
             if not t and not d:
                 continue
             if any(lt in t or lt in d for lt in lowered_targets):
@@ -1346,261 +1176,51 @@ def close_leader_group(dev1) -> bool:
 # ==========================================
 # فحص تصاريح الروضة ونظام استرجاع الحساب
 # ==========================================
-def _normalize_permit_text(text: str) -> str:
-    s = AR_DIACRITICS_RE.sub("", str(text or "").translate(ARABIC_DIGITS_TRANS)).strip().lower()
-    s = s.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ٱ", "ا")
-    s = s.replace("ى", "ي").replace("ة", "ه").replace("ؤ", "و").replace("ئ", "ي")
-    return re.sub(r"\s+", " ", s)
-
-
-_AR_MONTHS_NORM = {_normalize_permit_text(k): v for k, v in AR_MONTHS.items()}
-
-
-def _classify_rawdah_status(status_text: str) -> str:
-    norm = _normalize_permit_text(status_text)
-    if not norm:
-        return ""
-    if any(hdr in norm for hdr in ("التصاريح الساريه", "active permits", "valid permits", "تفاصيل الحجز", "booking details")):
-        return ""
-
-    # يجب فحص الإلغاء أولاً لأن "ملغى من قبل المستخدم" تحتوي على كلمة "المستخدم"!
-    if any(k in norm for k in ("ملغي", "ملغاه", "الغاء", "cancel")):
-        return "cancelled"
-
-    if any(k in norm for k in ("غير مستخدم", "unused", "not used")):
-        return "unused"
-
-    has_neg = ("غير " in norm or "inactive" in norm or "invalid" in norm or "unconfirmed" in norm)
-    if not has_neg:
-        if any(k in norm for k in (
-            "موكد", "منتظر التاكيد", "بانتظار التاكيد", "قيد الانتظار",
-            "confirmed", "awaiting confirmation", "pending confirmation", "waiting confirmation"
-        )) or re.search(
-            r"(?:^|[\s\-:/])(?:ساري|ساريه|فعال|فعاله|قادم|قادمه|active|valid|upcoming|pending|awaiting)(?:$|[\s\-:/])",
-            norm
-        ):
-            return "active"
-
-    # التأكد أن "مستخدم" كلمة مستقلة وليست جزءاً من "المستخدم" أو أي عبارة ملغية
-    if (
-        "تم الاستخدام" in norm
-        or re.search(r"(?:^|[\s\-:/])مستخدم(?:ه|ين)?(?:$|[\s\-:/])", norm)
-        or "منتهي الصلاحيه" in norm
-        or re.search(r"(?:^|[\s\-:/])(?:منتهي|مكتمل)(?:ه)?(?:$|[\s\-:/])", norm)
-        or re.search(r"\b(?:used|completed|expired)\b", norm)
-    ):
-        return "used"
-
-    return ""
-
-
-def _parse_permit_date(text: str) -> Optional[datetime]:
-    raw = str(text or "").translate(ARABIC_DIGITS_TRANS).strip()
-    if not raw:
-        return None
-
-    m = re.search(r"(\d{1,2})\s+([\u0621-\u064A]+)\s+(\d{4})", raw)
-    if m:
-        day, mon_name, yr = int(m.group(1)), _normalize_permit_text(m.group(2)), int(m.group(3))
-        mon = _AR_MONTHS_NORM.get(mon_name)
-        if mon:
-            try:
-                return datetime(yr, mon, day)
-            except ValueError:
-                pass
-
-    m_en1 = re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,12})\s+(\d{4})\b", raw)
-    if m_en1:
-        day, mon_name, yr = int(m_en1.group(1)), m_en1.group(2).lower(), int(m_en1.group(3))
-        mon = EN_MONTHS.get(mon_name)
-        if mon:
-            try:
-                return datetime(yr, mon, day)
-            except ValueError:
-                pass
-
-    m_en2 = re.search(r"\b([A-Za-z]{3,12})\s+(\d{1,2}),?\s+(\d{4})\b", raw)
-    if m_en2:
-        mon_name, day, yr = m_en2.group(1).lower(), int(m_en2.group(2)), int(m_en2.group(3))
-        mon = EN_MONTHS.get(mon_name)
-        if mon:
-            try:
-                return datetime(yr, mon, day)
-            except ValueError:
-                pass
-
-    m_iso = re.search(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b", raw)
-    if m_iso:
-        yr, mon, day = int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3))
-        try:
-            return datetime(yr, mon, day)
-        except ValueError:
-            pass
-
-    m_dmy = re.search(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b", raw)
-    if m_dmy:
-        day, mon, yr = int(m_dmy.group(1)), int(m_dmy.group(2)), int(m_dmy.group(3))
-        try:
-            return datetime(yr, mon, day)
-        except ValueError:
-            pass
-
-    return None
-
-
-def _is_booking_header(text: str) -> bool:
-    norm = _normalize_permit_text(text)
-    return (
-        "رقم الحجز" in norm
-        or "booking no" in norm
-        or "booking number" in norm
-        or "booking #" in norm
-        or "permit no" in norm
-        or "reservation no" in norm
-    )
-
-
-def _is_rawdah_type_text(text: str) -> bool:
-    norm = _normalize_permit_text(text)
-    return "الروضه" in norm or "rawdah" in norm
-
-
-def _populate_card_from_items(card: dict, items: list):
-    for item in items:
-        t = item["text"]
-        if _is_booking_header(t) and not card["id"]:
-            card["id"] = t
-        elif _is_rawdah_type_text(t):
-            card["type"] = t
-        else:
-            skind = _classify_rawdah_status(t)
-            if skind:
-                card["status"] = t
-                card["kind"] = skind
-                continue
-            tm = re.search(r"\b(\d{1,2}:\d{2}(?:\s*(?:AM|PM|ص|م))?)\b", t.translate(ARABIC_DIGITS_TRANS), re.IGNORECASE)
-            if tm and not card["time_str"]:
-                card["time_str"] = tm.group(1).strip()
-            dt = _parse_permit_date(t)
-            if dt and not card["date"]:
-                card["date_str"] = t
-                card["date"] = dt
-
-
-def _extract_permit_cards_from_xml(xml_str: str) -> list:
-    try:
-        root = ET.fromstring(xml_str.encode("utf-8"))
-    except Exception:
-        return []
-
-    items = []
-    seen_cy = set()
-    for node in root.iter():
-        if node.attrib.get("class") == "android.widget.EditText":
-            continue
-        raw_t = (node.attrib.get("text") or "").strip()
-        raw_d = (node.attrib.get("content-desc") or "").strip() if not raw_t else ""
-        bounds = node.attrib.get("bounds") or ""
-        cy = None
-        bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
-        if bm:
-            cy = (int(bm.group(2)) + int(bm.group(4))) // 2
-        lines = [raw_t] if raw_t else [ln.strip() for ln in raw_d.splitlines() if ln.strip()]
-        for ln in lines:
-            key = (ln, cy)
-            if ln and key not in seen_cy:
-                seen_cy.add(key)
-                items.append({"text": ln, "cy": cy})
-
-    headers = [it for it in items if _is_booking_header(it["text"])]
-    bounded_headers = sorted([h for h in headers if h["cy"] is not None], key=lambda h: h["cy"])
-
-    # إزالة التكرار لو عنوان الحجز مقسم لعنصرين في نفس السطر
-    merged_headers = []
-    for h in bounded_headers:
-        if merged_headers and abs(h["cy"] - merged_headers[-1]["cy"]) <= 25:
-            continue
-        merged_headers.append(h)
-
-    permits = []
-    if merged_headers:
-        cards_buckets = [
-            {"id": h["text"], "type": "", "status": "", "kind": "", "date_str": "", "time_str": "", "date": None, "_items": []}
-            for h in merged_headers
-        ]
-        for it in items:
-            cy = it["cy"]
-            if cy is None:
-                continue
-            target_idx = None
-            for idx_h, h in enumerate(merged_headers):
-                low_y = h["cy"] - 85
-                high_y = merged_headers[idx_h + 1]["cy"] - 85 if idx_h + 1 < len(merged_headers) else 999999
-                if low_y <= cy < high_y:
-                    target_idx = idx_h
-                    break
-            if target_idx is not None:
-                cards_buckets[target_idx]["_items"].append(it)
-        for cb in cards_buckets:
-            _populate_card_from_items(cb, cb["_items"])
-            permits.append(cb)
-        return permits
-
-    # مسار بديل إذا كانت العناصر بدون إحداثيات bounds أو بدون بادئة رقم الحجز
-    if headers:
-        curr = None
-        pending_status = ""
-        pending_kind = ""
-        for it in items:
-            t = it["text"]
-            if _is_booking_header(t):
-                if curr:
-                    permits.append(curr)
-                curr = {"id": t, "type": "", "status": pending_status, "kind": pending_kind, "date_str": "", "time_str": "", "date": None}
-                pending_status = ""
-                pending_kind = ""
-            elif curr:
-                _populate_card_from_items(curr, [it])
-            else:
-                sk = _classify_rawdah_status(t)
-                if sk:
-                    pending_status = t
-                    pending_kind = sk
-        if curr:
-            permits.append(curr)
-        return permits
-
-    # ملاذ أخير: إذا ظهرت بطاقة تصريح روضة وحالتها بدون "رقم الحجز / Booking No"
-    rawdah_anchors = [it for it in items if _is_rawdah_type_text(it["text"]) and it["cy"] is not None]
-    if rawdah_anchors and any(_classify_rawdah_status(it["text"]) for it in items):
-        for anc in rawdah_anchors:
-            cb = {"id": "", "type": anc["text"], "status": "", "kind": "", "date_str": "", "time_str": "", "date": None}
-            near = [it for it in items if it["cy"] is not None and (anc["cy"] - 180) <= it["cy"] <= (anc["cy"] + 220)]
-            _populate_card_from_items(cb, near)
-            if cb["status"] or cb["date"]:
-                permits.append(cb)
-
-    return permits
-
-
 def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
     """
-    فحص تصاريح الروضة الشريفة من شاشة المواعيد (عربي/إنجليزي):
-    - لو حاجز لنفسه حالياً (مؤكد / منتظر التأكيد / ساري / Active / Confirmed) -> مينفعش
-    - لو مستخدم فعلياً أو منتهي (بدون احتساب الحجوزات الملغية):
+    فحص تصاريح الروضة الشريفة من شاشة المواعيد:
+    - لو حاجز لنفسه حالياً (مؤكد / منتظر التأكيد / ساري) -> مينفعش
+    - لو مستخدم أو منتهي:
       - لو عدى 365 يوم على أحدث تصريح -> ينفع
       - لو لم يمر 365 يوم -> مينفعش
-    - لو التصريح ملغي (ملغى من قبل المستخدم / ملغي / Cancelled) -> ينفع تماماً (لا يمنع التسجيل كأدمن أو الربط كمرافق)
     - لو لا توجد أي تصاريح روضة سابقة -> ينفع
     """
-    permits = _extract_permit_cards_from_xml(xml_str)
-    rawdah_permits = [p for p in permits if _is_rawdah_type_text(p.get("type", ""))]
-    for p in rawdah_permits:
-        if not p.get("kind"):
-            p["kind"] = _classify_rawdah_status(p.get("status", ""))
+    try:
+        root = ET.fromstring(xml_str.encode("utf-8"))
+        nodes = [n.attrib.get("text", "").strip() for n in root.iter() if n.attrib.get("text")]
+    except Exception:
+        nodes = []
 
-    # 1. هل المعتمر حاجز لنفسه حالياً (مؤكد أو بانتظار التأكيد أو ساري)؟
-    active_rawdah = [p for p in rawdah_permits if p.get("kind") == "active"]
+    permits = []
+    curr = None
+    for t in nodes:
+        if "رقم الحجز" in t:
+            if curr:
+                permits.append(curr)
+            curr = {"id": t, "type": "", "status": "", "date_str": "", "time_str": "", "date": None}
+        elif curr:
+            if "تصريح الروضة" in t:
+                curr["type"] = t
+            elif any(s in t for s in ("مستخدم", "منتهي", "ساري", "ملغى", "ملغي", "مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد")):
+                curr["status"] = t
+            elif re.match(r"^\d{1,2}:\d{2}$", t):
+                curr["time_str"] = t
+            else:
+                m = re.match(r"(\d{1,2})\s+([\u0621-\u064A]+)\s+(\d{4})", t)
+                if m:
+                    day, mon_name, yr = int(m.group(1)), m.group(2), int(m.group(3))
+                    mon = AR_MONTHS.get(mon_name)
+                    if mon:
+                        curr["date_str"] = t
+                        curr["date"] = datetime(yr, mon, day)
+    if curr:
+        permits.append(curr)
+
+    rawdah_permits = [p for p in permits if "الروضة" in p.get("type", "")]
+
+    # 1. هل المعتمر حاجز لنفسه حالياً (مؤكد أو بانتظار التأكيد)؟
+    active_keywords = ("مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد", "ساري", "قادم", "فعال")
+    active_rawdah = [p for p in rawdah_permits if any(k in p.get("status", "") for k in active_keywords)]
     if active_rawdah:
         p = active_rawdah[0]
         date_disp = p.get("date_str") or "محدد"
@@ -1609,8 +1229,8 @@ def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
         reason = f"مينفعش - المعتمر حاجز لنفسه تصريح روضة ({stat_disp}) بتاريخ {date_disp} {time_disp}".strip()
         return False, reason, {"status": stat_disp, "date": date_disp, "time": time_disp, "type": p.get("type")}
 
-    # 2. فحص التصاريح المستخدمة فعلياً أو المنتهية (مستبعد منها الملغي من قبل المستخدم)
-    used_rawdah = [p for p in rawdah_permits if p.get("kind") == "used" and p.get("date")]
+    # 2. فحص التصاريح السابقة (مستخدم / منتهي)
+    used_rawdah = [p for p in rawdah_permits if any(k in p.get("status", "") for k in ("مستخدم", "منتهي")) and p.get("date")]
     now = datetime.now()
     if used_rawdah:
         latest = max(used_rawdah, key=lambda x: x["date"])
@@ -1623,24 +1243,7 @@ def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
             reason = f"مينفعش - دخل الروضة بتاريخ {date_disp} (مر فقط {days_passed} يوم ولم يكمل سنة)"
             return False, reason, {"status": latest.get("status"), "date": date_disp, "days_passed": days_passed, "type": latest.get("type")}
 
-    # 3. التصاريح الملغية لا تمنع التسجيل أو الربط أبداً
-    cancelled_rawdah = [p for p in rawdah_permits if p.get("kind") == "cancelled"]
-    if cancelled_rawdah:
-        dated_cancels = [p for p in cancelled_rawdah if p.get("date")]
-        latest_c = max(dated_cancels, key=lambda x: x["date"]) if dated_cancels else cancelled_rawdah[0]
-        stat_disp = latest_c.get("status") or "ملغى"
-        date_disp = latest_c.get("date_str") or "غير محدد"
-        time_disp = latest_c.get("time_str") or ""
-        reason = f"ينفع - تصريح الروضة ({stat_disp}) بتاريخ {date_disp} (الحجز ملغي ويمكن تسجيله كأدمن أو ربطه كمرافق)"
-        return True, reason, {
-            "status": stat_disp,
-            "date": date_disp,
-            "time": time_disp,
-            "type": latest_c.get("type"),
-            "cancelled": True,
-        }
-
-    # 4. لا توجد تصاريح روضة مستخدمة أو مؤكدة
+    # 3. لا توجد تصاريح روضة مستخدمة أو مؤكدة
     reason = "ينفع - لا توجد أي تصاريح روضة سابقة للمعتمر"
     return True, reason, {"status": "none", "date": None}
 
@@ -1659,23 +1262,51 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
 
     # 1. الانتقال لشاشة استعد حسابك
     dump = dev.dump_hierarchy()
-    if "تسجيل الحساب من جديد" in dump or "كافة الزوار" in dump or "زائر دولي" in dump:
-        log.info(f"[{label}] نافذة (تسجيل الحساب من جديد) مفتوحة بالفعل بعد الضغط على الزر الأسود.")
-    elif "استعد حسابك" in dump:
-        if not click_text_in_xml(dev, dump, ("سجّل الخروج واستعد حسابك", "استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1800):
-            dev.click(540, 1711)
-        smart_sleep(1.8, mult)
-    elif "لديك مشكلة" in dump:
-        click_text_in_xml(dev, dump, ("لديك مشكلة",), min_y=600, max_y=1200)
-        smart_sleep(1.0, mult)
+    dump_clean = strip_arabic_diacritics(dump)
+
+    # إذا كانت نافذة "رقم الهوية مسجّل مسبقًا" مفتوحة، نضغط الزر الأسود "سجّل الخروج واستعد حسابك" (540, 1770)
+    if "سجل الخروج واستعد حسابك" in dump_clean or "مسجل مسبق" in dump_clean or "مسجل باسم حساب" in dump_clean:
+        log.info(f"[{label}] الضغط على زر 'سجّل الخروج واستعد حسابك'...")
+        if not click_text_in_xml(dev, dump, ("سجل الخروج واستعد حسابك", "استعد حسابك", "سجل الخروج"), min_y=1500, max_y=1850):
+            dev.click(540, 1770)
+        smart_sleep(1.5, mult)
+        wait_for_network_loading(dev, max_wait=10.0)
+        # الضغط مرتين في أعلى منتصف الشاشة لإغلاق أي نافذة منبثقة
+        dev.click(540, 300)
+        smart_sleep(0.5, mult)
+        dev.click(540, 300)
+        smart_sleep(0.8, mult)
+        dump = dev.dump_hierarchy()
+        dump_clean = strip_arabic_diacritics(dump)
+
+    # فحص الشاشة الحالية بعد الضغط على الزر الأسود (أو عند البدء اليدوي)
+    if "تسجيل الحساب من جديد" in dump_clean or "كافة الزوار" in dump_clean or "زائر دولي" in dump_clean:
+        log.info(f"[{label}] تم فتح شاشة 'تسجيل الحساب من جديد' مباشرة ✓")
+    elif "استعد حسابك" in dump_clean or "استعادة حسابك" in dump_clean:
+        if not click_text_in_xml(dev, dump, ("استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1850):
+            dev.click(780, 1650)
+        smart_sleep(1.5, mult)
+        wait_for_network_loading(dev, max_wait=8.0)
+    elif "لديك مشكلة" in dump_clean:
+        if not click_text_in_xml(dev, dump, ("لديك مشكلة",), min_y=600, max_y=1200):
+            dev.click(500, 845)
+        smart_sleep(1.2, mult)
         dev.click(780, 1650)
+        smart_sleep(1.5, mult)
+        wait_for_network_loading(dev, max_wait=8.0)
     else:
-        if any(m in dump for m in WELCOME_MARKERS) or "تسجيل الدخول أو إنشاء حساب" in dump:
+        if not (any(m in dump_clean for m in WELCOME_MARKERS) or "تسجيل الدخول أو إنشاء حساب" in dump_clean or "الدخول بواسطة البريد" in dump_clean):
+            force_clean_login_state(dev, emu_key)
+            dump = dev.dump_hierarchy()
+            dump_clean = strip_arabic_diacritics(dump)
+
+        if any(m in dump_clean for m in WELCOME_MARKERS) or "تسجيل الدخول أو إنشاء حساب" in dump_clean:
             dev.click(540, 1768)
             smart_sleep(1.2, mult)
 
         dump_sheet = dev.dump_hierarchy()
-        if "الدخول بواسطة البريد" in dump_sheet or "البريد الإلكتروني" in dump_sheet:
+        dump_sheet_clean = strip_arabic_diacritics(dump_sheet)
+        if "الدخول بواسطة البريد" in dump_sheet_clean or "البريد الإلكتروني" in dump_sheet_clean:
             if not click_text_in_xml(dev, dump_sheet, ("الدخول بواسطة البريد",), min_y=1200, max_y=1700):
                 dev.click(796, 1484)
             smart_sleep(1.2, mult)
@@ -1684,13 +1315,13 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         smart_sleep(1.2, mult)
         dev.click(780, 1650)
         smart_sleep(1.5, mult)
-
-    wait_for_network_loading(dev, max_wait=8.0)
+        wait_for_network_loading(dev, max_wait=8.0)
 
     # 2. شاشة "تسجيل الحساب من جديد" -> الضغط على "كافة الزوار" (540, 1690)
     dump_rec = dev.dump_hierarchy()
-    if "كافة الزوار" in dump_rec or "زائر دولي" in dump_rec:
-        if not click_text_in_xml(dev, dump_rec, ("كافة الزوار", "زائر دولي"), min_y=1400, max_y=1850):
+    dump_rec_clean = strip_arabic_diacritics(dump_rec)
+    if "كافة الزوار" in dump_rec_clean or "زائر دولي" in dump_rec_clean:
+        if not click_text_in_xml(dev, dump_rec, ("كافة الزوار", "زائر دولي"), min_y=500, max_y=1850):
             dev.click(540, 1690)
     else:
         dev.click(540, 1690)
@@ -1734,12 +1365,10 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     # الضغط على زر "التحقق من حسابك" (540, 1010)
     dev.click(540, 1010)
     smart_sleep(1.5, mult)
-    wait_for_network_loading(dev, max_wait=12.0, check_error=True)
+    wait_for_network_loading(dev, max_wait=12.0)
 
     # 5. إدخال الإيميل وكلمة المرور
     cred_inputs = wait_edits(dev, 2, timeout=3.5 * mult)
-    if cred_inputs is None:
-        raise_if_screen_has_error(dev)
     if cred_inputs is not None and len(cred_inputs) >= 2:
         cred_inputs[0].set_text(email_val)
         smart_sleep(0.2, mult)
@@ -1763,7 +1392,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     otp_sent_at = time.time()
     dev.click(540, 1055)
     smart_sleep(1.8, mult)
-    wait_for_network_loading(dev, max_wait=12.0, check_error=True)
+    wait_for_network_loading(dev, max_wait=12.0)
 
     # 6. استلام كود OTP
     log.info(f"[{label}] انتظار كود الـ OTP لاسترجاع الحساب من {req.client_email}...")
@@ -1784,7 +1413,6 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
 
     for _ in range(25):
         dump_succ = dev.dump_hierarchy()
-        raise_if_screen_has_error(dev, dump_succ)
         if any(w in dump_succ for w in ("استعادة حسابك بنجاح", "استعادة حسابك", "تابع واستكشف", "استكشف")):
             if not click_text_in_xml(dev, dump_succ, ("تابع واستكشف", "استكشف", "تابع"), min_y=1600, max_y=1900):
                 dev.click(540, 1793)
@@ -1831,16 +1459,9 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     eligible, reason, details = evaluate_rawdah_permits_from_xml(permits_xml)
     log.info(f"📊 [{label}] نتيجة فحص الأحقية لـ {pname}: {reason}")
 
-    # الرجوع لصفحة البروفايل والتأكد من استقرارها
-    for _ in range(2):
-        dev.press("back")
-        smart_sleep(1.1, mult)
-        dump_back = dev.dump_hierarchy()
-        if any(pm in dump_back for pm in ("عرض الكل", "Show All", "Show all", "بطاقاتي", "My Cards")) or (nid and nid in dump_back):
-            break
-        if any(om in dump_back for om in ("المواعيد", "Appointments", "طلباتي", "My Orders", "تصريح الروضة")):
-            dev.click(1019, 91)
-            smart_sleep(1.1, mult)
+    # الرجوع لصفحة البروفايل
+    dev.press("back")
+    smart_sleep(1.2, mult)
 
     # 10. تنفيذ القرار
     if not eligible:
@@ -1854,7 +1475,6 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
             "reason": reason,
             "pilgrim_name": pname,
             "nusuk_id": nid,
-            "used_email": email_val,
             "details": details,
             "message": reason,
         }
@@ -1869,7 +1489,6 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
                 "leader_active": True,
                 "leader_name": pname,
                 "leader_id": nid,
-                "leader_email": email_val,
                 "companions": [],
             }
         save_state()
@@ -1881,8 +1500,6 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
             "reason": reason,
             "leader_name": pname,
             "leader_id": nid,
-            "leader_email": email_val,
-            "used_email": email_val,
             "details": details,
             "message": f"تم استرجاع الحساب واعتماده كرئيسي بنجاح ({reason})",
         }
@@ -1930,8 +1547,6 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         "reason": reason,
         "companion_name": pname,
         "companion_id": nid,
-        "used_email": email_val,
-        "leader_email": (STATE.get("group") or {}).get("leader_email") or req.client_email.strip(),
         "group_count": group_count,
         "details": details,
         "message": f"تم استرجاع الحساب وربطه كمرافق {comp_num} بنجاح ({reason})",
@@ -1989,7 +1604,6 @@ def get_status():
         "leader_active": group["leader_active"],
         "leader_name": group["leader_name"],
         "leader_id": group["leader_id"],
-        "leader_email": group.get("leader_email"),
         "companions": group["companions"],
         "companions_count": len(group["companions"]),
         "max_companions": MAX_COMPANIONS,
@@ -2000,42 +1614,14 @@ def get_status():
     }
 
 
-@app.api_route("/api/set-speed", methods=["POST", "GET"])
+@app.post("/api/set-speed")
 def set_speed_api(multiplier: float = 1.0):
-    mult = max(0.5, min(3.0, float(multiplier)))
+    mult = max(0.8, min(3.0, float(multiplier)))
     with _state_lock:
         STATE["speed_multiplier"] = mult
     save_state()
-    log.info(f"⚡ تم تغيير معامل سرعة المحرك إلى: {mult}x")
+    log.info(f"تم تغيير معامل سرعة الانتظار إلى: {mult}x")
     return {"success": True, "speed_multiplier": mult}
-
-
-@app.api_route("/api/restart-server", methods=["POST", "GET"])
-def restart_server_api():
-    import sys
-    log.info("🔄 طلب إعادة تشغيل السيرفر من الواجهة...")
-
-    def _do_restart():
-        time.sleep(0.6)
-        server_path = os.path.abspath(__file__)
-        ps_cmd = f'powershell.exe -NoExit -ExecutionPolicy Bypass -Command "Set-Location \'{BASE_DIR}\'; & \'{sys.executable}\' \'{server_path}\'"'
-        subprocess.Popen(f'start "Nusuk Pro Engine" {ps_cmd}', shell=True)
-        os._exit(0)
-
-    threading.Thread(target=_do_restart, daemon=True).start()
-    return {"success": True, "message": "جاري إعادة تشغيل السيرفر..."}
-
-
-@app.api_route("/api/stop-server", methods=["POST", "GET"])
-def stop_server_api():
-    log.info("⏹️ طلب إيقاف السيرفر من الواجهة...")
-
-    def _do_stop():
-        time.sleep(0.5)
-        os._exit(0)
-
-    threading.Thread(target=_do_stop, daemon=True).start()
-    return {"success": True, "message": "تم إيقاف السيرفر بنجاح"}
 
 
 @app.get("/api/health")
@@ -2145,43 +1731,25 @@ def recover_account_api(req: RegisterRequest):
     with exclusive(LOCK_WAIT) as got:
         if not got:
             return BUSY_RESPONSE
-        dev = None
-        emu_key = "emu1"
         try:
             with _state_lock:
                 leader_active = STATE["group"]["leader_active"]
                 comp_count = len(STATE["group"]["companions"])
-            force_role = (req.force_role or "").strip().lower() or None
-            role = force_role or ("companion" if leader_active else "leader")
-            if role == "companion" and not leader_active:
-                return {"success": False, "status": "invalid_state", "error": "لا يوجد حساب رئيسي نشط - سجّل الرئيسي أولاً"}
-            if role == "leader" and leader_active:
-                return {"success": False, "status": "invalid_state", "error": "يوجد حساب رئيسي نشط - أنهِ المجموعة أولاً"}
+            role = req.force_role or ("companion" if leader_active else "leader")
             emu_key = "emu1" if role == "leader" else "emu2"
             comp_num = comp_count + 1
             mult = float(req.speed_multiplier or STATE.get("speed_multiplier", 1.0))
-            if req.speed_multiplier:
-                with _state_lock:
-                    STATE["speed_multiplier"] = mult
             dev = get_device(EMUS[emu_key]["serial"])
-            reset_device_error_capture(dev)
-            res = run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
-            if isinstance(res, dict) and not res.get("screenshot") and getattr(dev, "_last_captured_error_shot", None):
-                res["screenshot"] = getattr(dev, "_last_captured_error_shot", None)
-            return res
+            return run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
         except Exception as e:
             log.exception("خطأ في /api/recover")
-            shot = getattr(e, "screenshot", None) or (getattr(dev, "_last_captured_error_shot", None) if dev else None) or save_failure_artifacts(dev, f"{emu_key}_recover")
-            return {"success": False, "status": "error", "error": str(e), "screenshot": shot}
+            return {"success": False, "status": "error", "error": str(e)}
 
 
 def _run_register(req: RegisterRequest) -> dict:
     p = req.pilgrim or {}
     dummy_name = "Ab"
     mult = float(req.speed_multiplier or STATE.get("speed_multiplier", 1.0))
-    if req.speed_multiplier:
-        with _state_lock:
-            STATE["speed_multiplier"] = mult
 
     email_val = extract_field(p, ["email", "البريد الالكتروني", "البريد الإلكتروني", "Email", "الايميل"]) or req.client_email.strip()
     password_val = extract_field(p, ["password", "الباسورد", "كلمة المرور", "Password", "pass"]) or DEFAULT_PASSWORD
@@ -2222,7 +1790,6 @@ def _run_register(req: RegisterRequest) -> dict:
     label = "المحاكي الأول (رئيسي)" if role == "leader" else f"المحاكي الثاني (مرافق {comp_num})"
 
     dev = get_device(emu["serial"])
-    reset_device_error_capture(dev)
     dev1 = None
 
     log.info("=" * 55)
@@ -2262,7 +1829,7 @@ def _run_register(req: RegisterRequest) -> dict:
         otp_sent_at = time.time()
         dev.click(558, 1138)
         smart_sleep(1.8, mult)
-        wait_for_network_loading(dev, max_wait=12.0, check_error=True)
+        wait_for_network_loading(dev, max_wait=12.0)
 
         # 3. استلام وإدخال كود OTP
         otp = fetch_nusuk_otp(req.client_email.strip(), req.client_pass, timeout=55, sent_after=otp_sent_at)
@@ -2278,7 +1845,7 @@ def _run_register(req: RegisterRequest) -> dict:
 
         # 4. انتظار انتهاء تحميل الـ OTP ثم 3 نقرات تنظيف
         smart_sleep(1.8, mult)
-        wait_for_network_loading(dev, max_wait=12.0, check_error=True)
+        wait_for_network_loading(dev, max_wait=12.0)
         for _ in range(3):
             dev.click(1000, 100)
             smart_sleep(0.3, mult)
@@ -2347,19 +1914,18 @@ def _run_register(req: RegisterRequest) -> dict:
         # 9. زر الحفظ النهائي وفحص النتيجة
         dev.click(540, 1040)
         smart_sleep(1.2, mult)
-        wait_for_network_loading(dev, max_wait=15.0, check_error=True)
+        wait_for_network_loading(dev, max_wait=15.0)
 
         outcome = None
         for _ in range(14):
             raw_dump = dev.dump_hierarchy()
-            screen_dump = raw_dump.lower()
-            if any(k in screen_dump for k in ALREADY_KEYS):
+            screen_dump = strip_arabic_diacritics(raw_dump).lower()
+            if any(strip_arabic_diacritics(k).lower() in screen_dump for k in ALREADY_KEYS):
                 outcome = "already"
                 break
-            if any(k in screen_dump for k in SUCCESS_KEYS):
+            if any(strip_arabic_diacritics(k).lower() in screen_dump for k in SUCCESS_KEYS):
                 outcome = "success"
                 break
-            raise_if_screen_has_error(dev, raw_dump)
             time.sleep(0.5)
 
         if outcome is None and len(dev(className="android.widget.EditText")) >= 2:
@@ -2367,25 +1933,30 @@ def _run_register(req: RegisterRequest) -> dict:
             smart_sleep(0.3, mult)
             dev.click(540, 1040)
             smart_sleep(1.2, mult)
-            wait_for_network_loading(dev, max_wait=10.0, check_error=True)
+            wait_for_network_loading(dev, max_wait=10.0)
             for _ in range(10):
                 raw_dump = dev.dump_hierarchy()
-                screen_dump = raw_dump.lower()
-                if any(k in screen_dump for k in ALREADY_KEYS):
+                screen_dump = strip_arabic_diacritics(raw_dump).lower()
+                if any(strip_arabic_diacritics(k).lower() in screen_dump for k in ALREADY_KEYS):
                     outcome = "already"
                     break
-                if any(k in screen_dump for k in SUCCESS_KEYS):
+                if any(strip_arabic_diacritics(k).lower() in screen_dump for k in SUCCESS_KEYS):
                     outcome = "success"
                     break
-                raise_if_screen_has_error(dev, raw_dump)
                 time.sleep(0.5)
 
         if outcome == "already":
-            log.warning("الحساب مسجل مسبقاً! الضغط على الزر الأسود (سجّل الخروج واستعد حسابك) وبدء الاسترجاع...")
-            if not click_text_in_xml(dev, dev.dump_hierarchy(), ("سجّل الخروج واستعد حسابك", "استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1800):
-                dev.click(540, 1711)
-            smart_sleep(1.8, mult)
-            wait_for_network_loading(dev, max_wait=8.0)
+            log.warning("الحساب مسجل مسبقاً! الضغط على الزر الأسود 'سجّل الخروج واستعد حسابك' وبدء مسار استرجاع الحساب تلقائياً...")
+            dump_alr = dev.dump_hierarchy()
+            if not click_text_in_xml(dev, dump_alr, ("سجل الخروج واستعد حسابك", "استعد حسابك", "سجل الخروج"), min_y=1500, max_y=1850):
+                dev.click(540, 1770)
+            smart_sleep(1.5, mult)
+            wait_for_network_loading(dev, max_wait=10.0)
+            # الضغط مرتين في أعلى منتصف الشاشة لإغلاق أي نافذة منبثقة
+            dev.click(540, 300)
+            smart_sleep(0.5, mult)
+            dev.click(540, 300)
+            smart_sleep(0.8, mult)
             return run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
 
         # 10. Continue Exploring ثم سهم الرجوع للبروفايل
@@ -2409,7 +1980,7 @@ def _run_register(req: RegisterRequest) -> dict:
             with _state_lock:
                 STATE["group"] = {
                     "leader_active": True, "leader_name": leader_name,
-                    "leader_id": leader_id, "leader_email": email_val, "companions": [],
+                    "leader_id": leader_id, "companions": [],
                 }
             save_state()
 
@@ -2418,7 +1989,6 @@ def _run_register(req: RegisterRequest) -> dict:
             return {
                 "success": True, "status": "leader_registered", "role": "leader",
                 "leader_name": leader_name, "leader_id": leader_id,
-                "leader_email": email_val, "used_email": email_val,
                 "message": "تم تسجيل الحساب الرئيسي بنجاح",
             }
 
@@ -2475,15 +2045,13 @@ def _run_register(req: RegisterRequest) -> dict:
         return {
             "success": True, "status": "companion_linked", "role": "companion",
             "companion_name": comp_name, "companion_id": comp_id,
-            "used_email": email_val,
-            "leader_email": (STATE.get("group") or {}).get("leader_email") or req.client_email.strip(),
             "group_count": group_count,
             "message": f"تم ربط المرافق {comp_num} وقبول الطلب بنجاح",
         }
 
     except Exception as e:
         log.exception(f"[{label}] استثناء أثناء التنفيذ: {e}")
-        shot = getattr(e, "screenshot", None) or getattr(dev, "_last_captured_error_shot", None) or save_failure_artifacts(dev, f"{emu_key}_{role}")
+        shot = save_failure_artifacts(dev, f"{emu_key}_{role}")
         if dev1 is not None and dev1 is not dev:
             try:
                 if is_add_friend_dialog_open(dev1):
@@ -2494,56 +2062,250 @@ def _run_register(req: RegisterRequest) -> dict:
         return {"success": False, "status": "error", "error": str(e), "screenshot": shot}
 
 
-@app.api_route("/api/capture-screenshot", methods=["POST", "GET"])
-def capture_screenshot_api(emu_key: str = "emu1", tag: str = "manual_error"):
-    """التقاط اسكرين شوت فوري من المحاكي وحفظه"""
-    if emu_key not in EMUS:
-        emu_key = "emu1"
+# ==========================================
+# ميزة إلغاء الحجز عبر Nusuk API (مضافة على السيرفر الأصلي)
+# ==========================================
+NUSUK_STATIC_KEY = os.getenv(
+    "NUSUK_STATIC_KEY",
+    "d8b7986b9cd0866f8b53fc0a4b65f503cfce61c66cdef58e214525f1a6de28ce",
+)
+NUSUK_DYNAMIC_KEY = os.getenv(
+    "NUSUK_DYNAMIC_KEY",
+    "2f56343e14b347cf78956a3b4bd13a16a5b1ebe84d83de691b045beab72658f1",
+)
+NUSUK_API_VERSION = os.getenv("NUSUK_API_VERSION", "11")
+NUSUK_DEVICE_ID = os.getenv("NUSUK_DEVICE_ID", "00000000-0000-0000-0000-000000000000")
+NUSUK_BASE_URL = "https://nusukapp.nusuk.sa/nusuk/"
+
+_AES_SBOX = [
+    0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+    0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+    0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+    0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+    0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+    0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+    0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+    0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+    0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+    0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+    0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+    0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+    0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+    0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+    0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+    0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16,
+]
+_AES_RCON = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
+
+
+def _aes_xtime(a: int) -> int:
+    return (((a << 1) ^ 0x1b) & 0xff) if (a & 0x80) else ((a << 1) & 0xff)
+
+
+def _aes_expand_key(key16: bytes):
+    w = [list(key16[i:i + 4]) for i in range(0, 16, 4)]
+    for i in range(4, 44):
+        t = list(w[i - 1])
+        if i % 4 == 0:
+            t = [_AES_SBOX[t[1]], _AES_SBOX[t[2]], _AES_SBOX[t[3]], _AES_SBOX[t[0]]]
+            t[0] ^= _AES_RCON[i // 4 - 1]
+        w.append([w[i - 4][j] ^ t[j] for j in range(4)])
+    return [[b for i in range(4) for b in w[4 * r + i]] for r in range(11)]
+
+
+def _aes_encrypt_block(block, keys):
+    s = [block[i] ^ keys[0][i] for i in range(16)]
+    for rnd in range(1, 10):
+        s = [_AES_SBOX[b] for b in s]
+        s = [
+            s[0], s[5], s[10], s[15],
+            s[4], s[9], s[14], s[3],
+            s[8], s[13], s[2], s[7],
+            s[12], s[1], s[6], s[11],
+        ]
+        out = [0] * 16
+        for c in range(4):
+            a0, a1, a2, a3 = s[4 * c], s[4 * c + 1], s[4 * c + 2], s[4 * c + 3]
+            out[4 * c] = _aes_xtime(a0) ^ (_aes_xtime(a1) ^ a1) ^ a2 ^ a3
+            out[4 * c + 1] = a0 ^ _aes_xtime(a1) ^ (_aes_xtime(a2) ^ a2) ^ a3
+            out[4 * c + 2] = a0 ^ a1 ^ _aes_xtime(a2) ^ (_aes_xtime(a3) ^ a3)
+            out[4 * c + 3] = (_aes_xtime(a0) ^ a0) ^ a1 ^ a2 ^ _aes_xtime(a3)
+        s = [out[i] ^ keys[rnd][i] for i in range(16)]
+    s = [_AES_SBOX[b] for b in s]
+    s = [
+        s[0], s[5], s[10], s[15],
+        s[4], s[9], s[14], s[3],
+        s[8], s[13], s[2], s[7],
+        s[12], s[1], s[6], s[11],
+    ]
+    return [s[i] ^ keys[10][i] for i in range(16)]
+
+
+def encrypt_rawdah(request_dict: dict, key: Optional[str] = None) -> Tuple[str, str]:
+    alphabet = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    key = key or "".join(random.choice(alphabet) for _ in range(16))
+    k = key.encode("utf-8")
+    keys = _aes_expand_key(k)
+    pt = json.dumps(request_dict, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    pad_len = 16 - (len(pt) % 16)
+    pt += bytes([pad_len]) * pad_len
+    out = bytearray()
+    prev = list(k)
+    for i in range(0, len(pt), 16):
+        blk = [pt[i + j] ^ prev[j] for j in range(16)]
+        enc = _aes_encrypt_block(blk, keys)
+        out += bytes(enc)
+        prev = enc
+    b64 = base64.b64encode(bytes(out)).decode("ascii")
+    return key[:4] + b64 + key[4:], key
+
+
+def build_nusuk_headers(
+    bearer_token: Optional[str] = None,
+    device_id: Optional[str] = None,
+    lang: str = "ar",
+    version: Optional[str] = None,
+    timestamp: Optional[str] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    ts = timestamp or str(int(time.time() * 1000))
+    ver = version or NUSUK_API_VERSION
+    dev_id = device_id or NUSUK_DEVICE_ID
+    h = hashlib.sha256((NUSUK_STATIC_KEY + NUSUK_DYNAMIC_KEY + ts).encode("utf-8")).hexdigest()
+    headers = {
+        "version": ver,
+        "hash": h,
+        "timestamp": ts,
+        "deviceType": "1",
+        "NUSUK_VERSION": ver,
+        "deviceID": dev_id,
+        "x-version": ver,
+        "x-device": dev_id,
+        "os-version": "Android 13 (33)",
+        "Accept": "application/json",
+        "accept-language": lang,
+        "Content-Type": "application/json",
+    }
+    if bearer_token:
+        tok = bearer_token.strip()
+        if not tok.lower().startswith("bearer "):
+            tok = f"Bearer {tok}"
+        headers["Authorization"] = tok
+    if extra_headers:
+        headers.update(extra_headers)
+    return headers
+
+
+def nusuk_http_request(
+    endpoint: str,
+    method: str = "POST",
+    body_dict: Optional[dict] = None,
+    bearer_token: Optional[str] = None,
+    device_id: Optional[str] = None,
+    lang: str = "ar",
+    timeout: int = 25,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> dict:
+    url = endpoint if endpoint.startswith("http") else (NUSUK_BASE_URL + endpoint.lstrip("/"))
+    headers = build_nusuk_headers(
+        bearer_token=bearer_token,
+        device_id=device_id,
+        lang=lang,
+        extra_headers=extra_headers,
+    )
+    data_bytes = (
+        json.dumps(body_dict, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if body_dict is not None
+        else None
+    )
+    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method.upper())
     try:
-        dev = get_device(EMUS[emu_key]["serial"], timeout=8)
-        shot = save_failure_artifacts(dev, f"{emu_key}_{tag}")
-        return {"success": bool(shot), "screenshot": shot}
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                parsed = raw
+            return {"ok": True, "http_status": resp.status, "data": parsed}
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = raw
+        return {"ok": False, "http_status": e.code, "error": str(e), "data": parsed}
     except Exception as e:
-        return {"success": False, "error": str(e), "screenshot": None}
+        return {"ok": False, "http_status": None, "error": f"{type(e).__name__}: {e}", "data": None}
 
 
-def register_browser_protocol():
-    """تسجيل بروتوكول nusuk-server:// في ويندوز لتشغيل السيرفر بضغطة زر من المتصفح"""
-    try:
-        import sys
-        import winreg
-        python_exe = sys.executable
-        server_path = os.path.abspath(__file__)
-        cmd_str = f'powershell.exe -NoExit -ExecutionPolicy Bypass -Command "Set-Location \'{BASE_DIR}\'; & \'{python_exe}\' \'{server_path}\'"'
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\nusuk-server") as key:
-            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Nusuk Local Server Launcher")
-            winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\nusuk-server\shell\open\command") as cmd_key:
-            winreg.SetValueEx(cmd_key, "", 0, winreg.REG_SZ, cmd_str)
-    except Exception as e:
-        log.warning(f"تعذر تسجيل بروتوكول التشغيل التلقائي: {e}")
+class CancelPermitAPIRequest(BaseModel):
+    bearer_token: str
+    service: str = "rawdah"  # rawdah | reservations
+    reservation_id: Optional[str] = None
+    permit_ids: Optional[List[str]] = None
+    cancel_reason_id: Optional[int] = None
+    payload: Optional[dict] = None
+    encrypt_body: bool = False
+    device_id: Optional[str] = None
+    lang: str = "ar"
+    extra_headers: Optional[Dict[str, str]] = None
 
 
-def free_port_before_start(port: int):
-    """إغلاق أي نسخة قديمة عالقة على نفس البورت قبل بدء السيرفر"""
-    try:
-        my_pid = os.getpid()
-        out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True)
-        for line in out.splitlines():
-            parts = line.strip().split()
-            if len(parts) >= 5 and "LISTENING" in line:
-                pid = int(parts[-1])
-                if pid != my_pid and pid > 0:
-                    subprocess.run(f"taskkill /F /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    time.sleep(0.4)
-    except Exception:
-        pass
+def build_cancel_permit_payload(req: CancelPermitAPIRequest) -> dict:
+    if req.payload is not None:
+        return req.payload
+    inner: dict = {}
+    if req.reservation_id is not None:
+        inner["ReservationId"] = req.reservation_id
+    if req.permit_ids:
+        inner["Permits"] = [{"PermitId": pid} for pid in req.permit_ids]
+        inner["PermitIds"] = req.permit_ids
+    if req.cancel_reason_id is not None:
+        inner["CancelReasonId"] = req.cancel_reason_id
+    return {"Request": inner} if inner else {}
+
+
+@app.post("/api/rawdah/cancel-permit")
+def rawdah_cancel_permit_api(req: CancelPermitAPIRequest):
+    """إرسال طلب إلغاء حجز/تصريح مباشرة عبر Nusuk API (rawdah/v2/cancelPermit أو reservations/v2/cancelPermit)."""
+    endpoints_map = {
+        "rawdah": "rawdah/v2/cancelPermit",
+        "reservations": "reservations/v2/cancelPermit",
+    }
+    ep = endpoints_map.get((req.service or "rawdah").strip().lower())
+    if not ep:
+        return {"success": False, "error": f"قيمة service غير صحيحة. المتاح: {list(endpoints_map.keys())}"}
+
+    raw_body = build_cancel_permit_payload(req)
+    if not raw_body:
+        return {"success": False, "error": "لازم تبعت payload جاهز أو على الأقل reservation_id / permit_ids"}
+
+    send_body = raw_body
+    if req.encrypt_body:
+        enc_data, _ = encrypt_rawdah(raw_body)
+        send_body = {"data": enc_data}
+
+    log.info(f"🗑️ إرسال طلب إلغاء حجز على {ep} (encrypted={req.encrypt_body})...")
+    res = nusuk_http_request(
+        ep,
+        method="POST",
+        body_dict=send_body,
+        bearer_token=req.bearer_token,
+        device_id=req.device_id,
+        lang=req.lang,
+        extra_headers=req.extra_headers,
+    )
+    return {
+        "success": res["ok"],
+        "endpoint": ep,
+        "encrypted": req.encrypt_body,
+        "sent_request": raw_body,
+        **res,
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    register_browser_protocol()
-    free_port_before_start(PORT)
     log.info(f"تشغيل السيرفر على {HOST}:{PORT} | Origins: {ALLOWED_ORIGINS}")
     uvicorn.run(app, host=HOST, port=PORT)
