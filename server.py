@@ -2381,6 +2381,19 @@ def _nusuk_drop_cached_token(email: Optional[str]) -> None:
         _NUSUK_TOKEN_CACHE.pop(email.strip().lower(), None)
 
 
+def nusuk_token_is_valid(token: Optional[str], device_id: Optional[str] = None,
+                         lang: str = "ar") -> bool:
+    """يتحقق إن التوكن لسه شغال بنداء قراءة خفيف (ActivePermits)."""
+    if not token:
+        return False
+    res = nusuk_http_request("manasik/ActivePermits", method="GET", body_dict=None,
+                             bearer_token=token, device_id=device_id, lang=lang, timeout=20)
+    payload = res.get("data")
+    if _nusuk_is_session_error(payload):
+        return False
+    return bool(res.get("ok")) or payload is not None
+
+
 def nusuk_extract_data(payload) -> dict:
     env = _nusuk_envelope(payload)
     source = env or (payload if isinstance(payload, dict) else {})
@@ -2612,8 +2625,10 @@ def _nusuk_cache_set(email: str, token: str, otp_id=None, user_id=None):
 def nusuk_api_fetch_token(email: str, password: str, otp: Optional[str] = None,
                           otp_email: Optional[str] = None, otp_app_password: Optional[str] = None,
                           otp_timeout: int = 90, device_id: Optional[str] = None,
-                          lang: str = "ar", use_cache: bool = True) -> dict:
-    """التدفق الكامل: login → (OTP يدوي أو من Gmail) → validate-otp → Bearer Token."""
+                          lang: str = "ar", use_cache: bool = True,
+                          otp_id: Optional[int] = None) -> dict:
+    """التدفق الكامل: login → (OTP يدوي أو من Gmail) → validate-otp → Bearer Token.
+    لو otp + otp_id مبعوتين مع بعض، يتخطى login ويؤكد الكود مباشرة على نفس otpId (بدون إرسال كود جديد)."""
     e = (email or "").strip().lower()
     p = (password or "").strip()
     if not e or not p:
@@ -2622,30 +2637,37 @@ def nusuk_api_fetch_token(email: str, password: str, otp: Optional[str] = None,
     if use_cache:
         cached = _nusuk_cache_get(e)
         if cached and cached.get("user_id") is not None:
-            log.info("استخدام توكن نسك المخزّن مؤقتاً لـ %s (UserID=%s)", e, cached.get("user_id"))
-            return {"ok": True, "token": cached["token"], "otp_id": cached.get("otp_id"),
-                    "user_id": cached.get("user_id"), "stage": "cache", "cached": True}
+            if nusuk_token_is_valid(cached.get("token"), device_id=device_id, lang=lang):
+                log.info("استخدام توكن نسك المخزّن مؤقتاً لـ %s (UserID=%s)", e, cached.get("user_id"))
+                return {"ok": True, "token": cached["token"], "otp_id": cached.get("otp_id"),
+                        "user_id": cached.get("user_id"), "stage": "cache", "cached": True, "validated": True}
+            log.info("♻️ التوكن المخزّن منتهي — تسجيل دخول جديد لـ %s", e)
+            _nusuk_drop_cached_token(e)
 
     t0 = time.time()
-    step1 = nusuk_api_login(e, p, device_id=device_id, lang=lang)
-    if not step1["ok"]:
-        return {"ok": False, "stage": "login",
-                "error": step1.get("response_desc") or "فشل تسجيل الدخول",
-                "http_status": step1.get("http_status"),
-                "response_code": step1.get("response_code"),
-                "data": step1.get("data")}
-
-    otp_id = step1["otp_id"]
     otp_val = (otp or "").strip()
-    if not otp_val:
-        if not (otp_email and otp_app_password):
-            return {"ok": False, "stage": "otp", "otp_id": otp_id,
-                    "error": "مطلوب كود OTP أو otp_email + otp_app_password لقراءة الكود من Gmail"}
-        log.info("انتظار OTP من بريد %s ...", otp_email)
-        otp_val = fetch_nusuk_otp(otp_email, otp_app_password, timeout=otp_timeout, sent_after=t0) or ""
+    if otp_val and otp_id:
+        otp_id = int(otp_id)
+        log.info("تأكيد كود OTP مباشرة على otpId=%s (بدون login جديد)", otp_id)
+    else:
+        step1 = nusuk_api_login(e, p, device_id=device_id, lang=lang)
+        if not step1["ok"]:
+            return {"ok": False, "stage": "login",
+                    "error": step1.get("response_desc") or "فشل تسجيل الدخول",
+                    "http_status": step1.get("http_status"),
+                    "response_code": step1.get("response_code"),
+                    "data": step1.get("data")}
+
+        otp_id = step1["otp_id"]
         if not otp_val:
-            return {"ok": False, "stage": "otp", "otp_id": otp_id,
-                    "error": "لم يتم العثور على كود OTP في البريد خلال الوقت المحدد"}
+            if not (otp_email and otp_app_password):
+                return {"ok": False, "stage": "otp", "otp_id": otp_id,
+                        "error": "مطلوب كود OTP أو otp_email + otp_app_password لقراءة الكود من Gmail"}
+            log.info("انتظار OTP من بريد %s ...", otp_email)
+            otp_val = fetch_nusuk_otp(otp_email, otp_app_password, timeout=otp_timeout, sent_after=t0) or ""
+            if not otp_val:
+                return {"ok": False, "stage": "otp", "otp_id": otp_id,
+                        "error": "لم يتم العثور على كود OTP في البريد خلال الوقت المحدد"}
 
     step2 = nusuk_api_verify_otp(e, p, otp_val, otp_id, device_id=device_id, lang=lang)
     if not step2["ok"]:
@@ -2664,14 +2686,14 @@ def resolve_nusuk_bearer_token(bearer_token: Optional[str] = None, email: Option
                                password: Optional[str] = None, otp: Optional[str] = None,
                                otp_email: Optional[str] = None, otp_app_password: Optional[str] = None,
                                otp_timeout: int = 90, device_id: Optional[str] = None,
-                               lang: str = "ar") -> dict:
+                               lang: str = "ar", otp_id: Optional[int] = None) -> dict:
     """يرجّع token جاهز: إما الممرَّر مباشرة أو عن طريق تسجيل دخول تلقائي."""
     if bearer_token and bearer_token.strip():
         return {"ok": True, "token": bearer_token.strip(), "source": "request"}
     if email and password:
         res = nusuk_api_fetch_token(email, password, otp=otp, otp_email=otp_email,
                                     otp_app_password=otp_app_password, otp_timeout=otp_timeout,
-                                    device_id=device_id, lang=lang)
+                                    device_id=device_id, lang=lang, otp_id=otp_id)
         if res.get("ok"):
             return {"ok": True, "token": res["token"], "source": res.get("stage"),
                     "otp_id": res.get("otp_id"), "user_id": res.get("user_id"),
@@ -2685,6 +2707,7 @@ class NusukTokenRequest(BaseModel):
     email: str
     password: str
     otp: Optional[str] = None
+    otp_id: Optional[int] = None
     otp_email: Optional[str] = None
     otp_app_password: Optional[str] = None
     otp_timeout: int = 90
@@ -2699,7 +2722,8 @@ def nusuk_token_api(req: NusukTokenRequest):
     try:
         res = nusuk_api_fetch_token(req.email, req.password, otp=req.otp, otp_email=req.otp_email,
                                     otp_app_password=req.otp_app_password, otp_timeout=req.otp_timeout,
-                                    device_id=req.device_id, lang=req.lang, use_cache=req.use_cache)
+                                    device_id=req.device_id, lang=req.lang, use_cache=req.use_cache,
+                                    otp_id=req.otp_id)
     except FlowError as e:
         return {"success": False, "error": str(e), "stage": "imap"}
     except Exception as e:
@@ -3154,6 +3178,7 @@ class RawdahSlotsRequest(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
     otp: Optional[str] = None
+    otp_id: Optional[int] = None
     otp_email: Optional[str] = None
     otp_app_password: Optional[str] = None
     otp_timeout: int = 90
@@ -3220,7 +3245,7 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
     token_info = resolve_nusuk_bearer_token(
         bearer_token=req.bearer_token, email=req.email, password=req.password, otp=req.otp,
         otp_email=req.otp_email, otp_app_password=req.otp_app_password,
-        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang, otp_id=getattr(req, "otp_id", None),
     )
     if not token_info.get("ok"):
         return {"success": False, "stage": token_info.get("stage"),
@@ -3251,7 +3276,7 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
         retry_token = resolve_nusuk_bearer_token(
             bearer_token=None, email=req.email, password=req.password, otp=req.otp,
             otp_email=req.otp_email, otp_app_password=req.otp_app_password,
-            otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+            otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang, otp_id=getattr(req, "otp_id", None),
         )
         if retry_token.get("ok"):
             token_info = retry_token
@@ -3263,6 +3288,23 @@ def rawdah_available_slots_api(req: RawdahSlotsRequest):
                 device_id=req.device_id,
                 lang=req.lang,
             )
+
+    if _nusuk_is_session_error(res.get("data")):
+        return {
+            "success": False,
+            "stage": "session",
+            "dates": [],
+            "total_slots": 0,
+            "response_code": _nusuk_response_code(res.get("data")),
+            "response_desc": _nusuk_envelope(res.get("data")).get(
+                "ResponseDesc", _nusuk_envelope(res.get("data")).get("responseDesc")),
+            "error_hint": "انتهت الجلسة — اضغط زر (دخول وجلب التوكن) تاني واكتب OTP الجديد",
+            "error": "انتهت الجلسة — أعد تسجيل الدخول (OTP جديد)",
+            "http_status": res.get("http_status"),
+            "token_source": token_info.get("source"),
+            "used_user_id": token_info.get("user_id"),
+            "data": res.get("data"),
+        }
 
     upstream = res.get("data")
     summary = summarize_rawdah_slots(upstream)
@@ -3308,6 +3350,7 @@ class RawdahIssueRequest(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
     otp: Optional[str] = None
+    otp_id: Optional[int] = None
     otp_email: Optional[str] = None
     otp_app_password: Optional[str] = None
     otp_timeout: int = 90
@@ -3321,7 +3364,7 @@ def rawdah_issue_permit_api(req: RawdahIssueRequest):
     token_info = resolve_nusuk_bearer_token(
         bearer_token=req.bearer_token, email=req.email, password=req.password, otp=req.otp,
         otp_email=req.otp_email, otp_app_password=req.otp_app_password,
-        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+        otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang, otp_id=getattr(req, "otp_id", None),
     )
     if not token_info.get("ok"):
         return {"success": False, "stage": token_info.get("stage"),
@@ -3360,30 +3403,71 @@ def rawdah_issue_permit_api(req: RawdahIssueRequest):
         "WaitingListRequestId": 0,
     }
 
-    attempts = []
-    res = None
-    used_endpoint = None
-    for ep_try in candidates:
-        log.info("🎫 إرسال حجز على %s ...", ep_try)
-        res = nusuk_http_request(
-            ep_try, method="POST", body_dict={"Request": inner},
-            bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
+    def _run_candidates():
+        results = []
+        for ep_try in candidates:
+            log.info("🎫 إرسال حجز على %s ...", ep_try)
+            res_try = nusuk_http_request(
+                ep_try, method="POST", body_dict={"Request": inner},
+                bearer_token=token_info["token"], device_id=req.device_id, lang=req.lang,
+            )
+            env_try = _nusuk_envelope(res_try.get("data"))
+            code_try = env_try.get("ResponseCode", env_try.get("responseCode"))
+            results.append({
+                "endpoint": ep_try, "res": res_try, "code": code_try,
+                "desc": env_try.get("ResponseDesc", env_try.get("responseDesc")),
+                "session": _nusuk_is_session_error(res_try.get("data")),
+            })
+            try:
+                log.info("🎫 [%s] code=%s | %s", ep_try, code_try,
+                         json.dumps(res_try.get("data"), ensure_ascii=False)[:500])
+            except Exception:
+                pass
+            if not results[-1]["session"] and (
+                    code_try in (200, "200", 0, "0") or nusuk_extract_permit_ids(res_try.get("data"))):
+                break
+        return results
+
+    results = _run_candidates()
+    if results and all(r["session"] for r in results) and req.email and req.password:
+        log.warning("🔁 توكن نسك منتهي — إعادة تسجيل دخول تلقائي ثم إعادة المحاولة...")
+        _nusuk_drop_cached_token(req.email)
+        retry_token = resolve_nusuk_bearer_token(
+            bearer_token=None, email=req.email, password=req.password, otp=req.otp,
+            otp_email=req.otp_email, otp_app_password=req.otp_app_password,
+            otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang, otp_id=getattr(req, "otp_id", None),
         )
-        env = _nusuk_envelope(res.get("data"))
-        code = env.get("ResponseCode", env.get("responseCode"))
-        attempt = {"endpoint": ep_try, "http_status": res.get("http_status"), "code": code,
-                   "desc": env.get("ResponseDesc", env.get("responseDesc"))}
-        attempts.append(attempt)
-        try:
-            log.info("🎫 [%s] code=%s | %s", ep_try, code, json.dumps(res.get("data"), ensure_ascii=False)[:500])
-        except Exception:
-            pass
-        if _nusuk_is_session_error(res.get("data")):
-            continue
-        if code in (200, "200", 0, "0") or nusuk_extract_permit_ids(res.get("data")):
-            used_endpoint = ep_try
+        if retry_token.get("ok"):
+            token_info = retry_token
+            results = _run_candidates()
+
+    if results and all(r["session"] for r in results):
+        return {
+            "success": False, "stage": "session", "permit_ids": [],
+            "attempts": [{"endpoint": r["endpoint"], "code": r["code"], "desc": r["desc"]} for r in results],
+            "response_code": results[-1]["code"],
+            "response_desc": results[-1]["desc"],
+            "error_hint": "انتهت الجلسة — اضغط زر (دخول وجلب التوكن) تاني واكتب OTP الجديد",
+            "error": "انتهت الجلسة — أعد تسجيل الدخول (OTP جديد)",
+            "http_status": results[-1]["res"].get("http_status"),
+            "used_user_id": uid,
+            "sent_request": inner,
+            "data": results[-1]["res"].get("data"),
+        }
+
+    chosen = None
+    for r in results:
+        if not r["session"] and (
+                r["code"] in (200, "200", 0, "0") or nusuk_extract_permit_ids(r["res"].get("data"))):
+            chosen = r
             break
-        used_endpoint = ep_try
+    if chosen is None and results:
+        chosen = results[-1]
+
+    res = chosen["res"] if chosen else None
+    used_endpoint = chosen["endpoint"] if chosen else None
+    attempts = [{"endpoint": r["endpoint"], "http_status": r["res"].get("http_status"),
+                 "code": r["code"], "desc": r["desc"]} for r in results]
 
     upstream = res.get("data") if res else None
     env = _nusuk_envelope(upstream)
