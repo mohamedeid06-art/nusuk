@@ -2327,6 +2327,20 @@ def _nusuk_pick_user_id(data) -> Optional[int]:
     return None
 
 
+def _nusuk_user_id_from_jwt(token: Optional[str]) -> Optional[int]:
+    """يحاول استخراج UserID من payload التوكن لو كان JWT (لحالة التوكن المُلصق يدويًا)."""
+    if not token or token.count(".") != 2:
+        return None
+    try:
+        payload_b64 = token.split(".")[1]
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        payload = json.loads(raw.decode("utf-8", "ignore"))
+    except Exception:
+        return None
+    return _nusuk_pick_user_id(payload) if isinstance(payload, dict) else None
+
+
 def _nusuk_drop_cached_token(email: Optional[str]) -> None:
     if not email:
         return
@@ -2785,9 +2799,13 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
                 "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
 
     auto_uid = token_info.get("user_id")
+    if auto_uid is None:
+        auto_uid = _nusuk_user_id_from_jwt(token_info.get("token"))
+        if auto_uid is not None:
+            log.info("👤 تم استخراج UserID من التوكن: %s", auto_uid)
     if auto_uid is not None:
         if req.user_id is not None and int(req.user_id) != int(auto_uid):
-            log.info("👤 تجاهل UserID المكتوب يدويًا (%s) واستخدام UserID الصحيح من الدخول (%s)", req.user_id, auto_uid)
+            log.info("👤 تجاهل UserID المكتوب يدويًا (%s) واستخدام UserID الصحيح (%s)", req.user_id, auto_uid)
         uid = auto_uid
     else:
         uid = req.user_id
