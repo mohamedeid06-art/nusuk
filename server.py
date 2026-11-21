@@ -2413,6 +2413,96 @@ def nusuk_extract_permit_ids(payload) -> List[str]:
     return ids
 
 
+def nusuk_summarize_active_permits(payload) -> dict:
+    """يفكك رد manasik/ActivePermits لقائمة حجوزات وتصاريح قابلة للعرض والاختيار."""
+    data = nusuk_extract_data(payload)
+
+    def as_list(v):
+        return v if isinstance(v, list) else []
+
+    reservations = []
+    for coll_key in ("Reservations", "RawdaReservation", "UmrahReservation"):
+        for item in as_list(data.get(coll_key)):
+            if not isinstance(item, dict):
+                continue
+            permits = []
+            for p in as_list(item.get("Permits")):
+                if not isinstance(p, dict):
+                    continue
+                permits.append({
+                    "permit_id": p.get("PermitID"),
+                    "status_rawdah": p.get("RawdahStatus"),
+                    "status_umrah": p.get("UmrahStatus"),
+                    "start": p.get("PermitStartDate"),
+                    "end": p.get("PermitEndDate"),
+                    "cancel_reason_id": p.get("cancelReasonId"),
+                    "name_ar": p.get("UserFullNameAr"),
+                })
+            reservations.append({
+                "source": coll_key,
+                "reservation_id": item.get("ResID"),
+                "rawdah_status": item.get("RawdahStatus"),
+                "umrah_status": item.get("UmrahStatus"),
+                "start": item.get("ResStartDateTime"),
+                "end": item.get("ResEndDateTime"),
+                "timeslot_ar": item.get("ResTimeslotAr"),
+                "service_ar": item.get("ServiceTypeNameAr"),
+                "permits": permits,
+            })
+
+    permit_ids: List[str] = []
+    for r in reservations:
+        for p in r["permits"]:
+            pid = p.get("permit_id")
+            if pid is not None and str(pid) not in permit_ids:
+                permit_ids.append(str(pid))
+
+    return {
+        "reservations": reservations,
+        "permit_ids": permit_ids,
+        "max_allowed": data.get("MaxAllowedPermitsNo", data.get("maxAllowedPermitsNo")),
+        "remaining": data.get("RemainingActivePermitsNo", data.get("remainingActivePermitsNo")),
+        "top_keys": list(data.keys())[:20] if isinstance(data, dict) else [],
+    }
+
+
+def nusuk_summarize_certificate_permits(payload) -> List[dict]:
+    """يفكك رد manasik/getPermitsForCertificate → سجل كل التصاريح (بما فيها غير النشطة)."""
+    raw = payload
+    items = []
+    if isinstance(raw, list):
+        items = raw
+    else:
+        env = _nusuk_envelope(raw)
+        source = env if env else (raw if isinstance(raw, dict) else {})
+        if isinstance(source, dict):
+            for key in ("data", "Data", "responseData", "ResponseData"):
+                v = source.get(key)
+                if isinstance(v, list):
+                    items = v
+                    break
+
+    out: List[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        out.append({
+            "permit_id": it.get("Id"),
+            "reservation_id": it.get("ReservationId"),
+            "status_id": it.get("StatusId"),
+            "status_name": it.get("StatusName"),
+            "rawdah_status_id": it.get("RawdahStatusId"),
+            "service_id": it.get("ServiceId"),
+            "start": it.get("DateAndTimeStart"),
+            "end": it.get("DateAndTimeEnd"),
+            "gate": it.get("GateName"),
+            "name": it.get("Name"),
+            "visitor_id": it.get("VisitorId"),
+            "current_year": it.get("CurrentYear"),
+        })
+    return out
+
+
 def nusuk_api_login(email: str, password: str, device_id: Optional[str] = None, lang: str = "ar") -> dict:
     """POST v2/login — يبعت كود OTP على إيميل الحساب ويرجع otpId/userId."""
     e = (email or "").strip().lower()
@@ -2899,6 +2989,115 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         "otp_id": token_info.get("otp_id"),
         "sent_request": inner,
         **res,
+    }
+
+
+class ActivePermitsRequest(BaseModel):
+    bearer_token: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    otp: Optional[str] = None
+    otp_email: Optional[str] = None
+    otp_app_password: Optional[str] = None
+    otp_timeout: int = 90
+    device_id: Optional[str] = None
+    lang: str = "ar"
+
+
+@app.post("/api/nusuk/active-permits")
+def nusuk_active_permits_api(req: ActivePermitsRequest):
+    """جلب كل الحجوزات والتصاريح النشطة للحساب (manasik/ActivePermits) للاختيار والإلغاء."""
+    token_info = resolve_nusuk_bearer_token(
+        bearer_token=req.bearer_token,
+        email=req.email,
+        password=req.password,
+        otp=req.otp,
+        otp_email=req.otp_email,
+        otp_app_password=req.otp_app_password,
+        otp_timeout=req.otp_timeout,
+        device_id=req.device_id,
+        lang=req.lang,
+    )
+    if not token_info.get("ok"):
+        return {"success": False, "stage": token_info.get("stage"),
+                "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
+
+    def _fetch_both():
+        r_active = nusuk_http_request(
+            "manasik/ActivePermits",
+            method="GET",
+            body_dict=None,
+            bearer_token=token_info["token"],
+            device_id=req.device_id,
+            lang=req.lang,
+        )
+        r_cert = nusuk_http_request(
+            "manasik/getPermitsForCertificate",
+            method="GET",
+            body_dict=None,
+            bearer_token=token_info["token"],
+            device_id=req.device_id,
+            lang=req.lang,
+        )
+        return r_active, r_cert
+
+    res, res_cert = _fetch_both()
+
+    refreshed = False
+    if _nusuk_is_session_error(res.get("data")) and req.email and req.password:
+        log.warning("🔁 توكن نسك منتهي — إعادة تسجيل دخول تلقائي ثم إعادة المحاولة...")
+        _nusuk_drop_cached_token(req.email)
+        retry_token = resolve_nusuk_bearer_token(
+            bearer_token=None, email=req.email, password=req.password, otp=req.otp,
+            otp_email=req.otp_email, otp_app_password=req.otp_app_password,
+            otp_timeout=req.otp_timeout, device_id=req.device_id, lang=req.lang,
+        )
+        if retry_token.get("ok"):
+            token_info = retry_token
+            refreshed = True
+            res, res_cert = _fetch_both()
+
+    upstream = res.get("data")
+    summary = nusuk_summarize_active_permits(upstream)
+    history_permits = nusuk_summarize_certificate_permits(res_cert.get("data"))
+    env = _nusuk_envelope(upstream)
+    env_cert = _nusuk_envelope(res_cert.get("data"))
+
+    active_permit_ids = [str(x) for x in summary.get("permit_ids", [])]
+    history_ids: List[str] = []
+    for p in history_permits:
+        pid = p.get("permit_id")
+        if pid is not None and str(pid) not in history_ids:
+            history_ids.append(str(pid))
+    all_ids = active_permit_ids + [pid for pid in history_ids if pid not in active_permit_ids]
+
+    log.info("📋 ActivePermits: reservations=%s | active=%s | history=%s | code=%s",
+             len(summary.get("reservations", [])), len(active_permit_ids), len(history_ids),
+             env.get("ResponseCode", env.get("responseCode")))
+    try:
+        log.info("📋 رد ActivePermits: %s", json.dumps(upstream, ensure_ascii=False)[:600])
+        log.info("📋 رد PermitsForCertificate: %s", json.dumps(res_cert.get("data"), ensure_ascii=False)[:600])
+    except Exception:
+        pass
+
+    return {
+        "success": res["ok"],
+        **summary,
+        "response_code": env.get("ResponseCode", env.get("responseCode")),
+        "response_desc": env.get("ResponseDesc", env.get("responseDesc")),
+        "history_response_code": env_cert.get("ResponseCode", env_cert.get("responseCode")),
+        "history_response_desc": env_cert.get("ResponseDesc", env_cert.get("responseDesc")),
+        "refreshed_token": refreshed,
+        "token_source": token_info.get("source"),
+        "otp_id": token_info.get("otp_id"),
+        "used_user_id": token_info.get("user_id"),
+        "http_status": res.get("http_status"),
+        "data": upstream,
+        "history_data": res_cert.get("data"),
+        "history_permits": history_permits,
+        "active_permit_ids": active_permit_ids,
+        "history_permit_ids": history_ids,
+        "permit_ids": all_ids,
     }
 
 
