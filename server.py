@@ -2484,8 +2484,8 @@ def nusuk_api_fetch_token(email: str, password: str, otp: Optional[str] = None,
 
     if use_cache:
         cached = _nusuk_cache_get(e)
-        if cached:
-            log.info("استخدام توكن نسك المخزّن مؤقتاً لـ %s", e)
+        if cached and cached.get("user_id") is not None:
+            log.info("استخدام توكن نسك المخزّن مؤقتاً لـ %s (UserID=%s)", e, cached.get("user_id"))
             return {"ok": True, "token": cached["token"], "otp_id": cached.get("otp_id"),
                     "user_id": cached.get("user_id"), "stage": "cache", "cached": True}
 
@@ -2784,7 +2784,13 @@ def rawdah_permits_api(req: RawdahPermitsRequest):
         return {"success": False, "stage": token_info.get("stage"),
                 "error": token_info.get("error") or "تعذر الحصول على Bearer Token"}
 
-    uid = req.user_id if req.user_id is not None else token_info.get("user_id")
+    auto_uid = token_info.get("user_id")
+    if auto_uid is not None:
+        if req.user_id is not None and int(req.user_id) != int(auto_uid):
+            log.info("👤 تجاهل UserID المكتوب يدويًا (%s) واستخدام UserID الصحيح من الدخول (%s)", req.user_id, auto_uid)
+        uid = auto_uid
+    else:
+        uid = req.user_id
     inner: Dict[str, object] = {
         "UserId": uid,
         "ReservationId": req.reservation_id,
