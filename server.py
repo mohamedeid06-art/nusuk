@@ -1,26 +1,20 @@
-import base64
 import copy
 import email
 import email.header
 import email.utils
-import hashlib
 import imaplib
 import json
 import logging
 import os
-import random
 import re
-import string
 import subprocess
 import threading
 import time
-import urllib.error
-import urllib.request
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 try:
     from dotenv import load_dotenv
@@ -2331,248 +2325,6 @@ def _run_register(req: RegisterRequest) -> dict:
                 pass
         force_clean_login_state(dev, emu_key)
         return {"success": False, "status": "error", "error": str(e), "screenshot": shot}
-
-
-# ==========================================
-# ميزة إلغاء الحجز عبر Nusuk API (مضافة على السيرفر الأصلي)
-# ==========================================
-NUSUK_STATIC_KEY = os.getenv(
-    "NUSUK_STATIC_KEY",
-    "d8b7986b9cd0866f8b53fc0a4b65f503cfce61c66cdef58e214525f1a6de28ce",
-)
-NUSUK_DYNAMIC_KEY = os.getenv(
-    "NUSUK_DYNAMIC_KEY",
-    "2f56343e14b347cf78956a3b4bd13a16a5b1ebe84d83de691b045beab72658f1",
-)
-NUSUK_API_VERSION = os.getenv("NUSUK_API_VERSION", "11")
-NUSUK_DEVICE_ID = os.getenv("NUSUK_DEVICE_ID", "00000000-0000-0000-0000-000000000000")
-NUSUK_BASE_URL = "https://nusukapp.nusuk.sa/nusuk/"
-
-_AES_SBOX = [
-    0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
-    0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
-    0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
-    0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
-    0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
-    0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
-    0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
-    0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
-    0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
-    0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
-    0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
-    0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
-    0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
-    0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
-    0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
-    0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16,
-]
-_AES_RCON = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
-
-
-def _aes_xtime(a: int) -> int:
-    return (((a << 1) ^ 0x1b) & 0xff) if (a & 0x80) else ((a << 1) & 0xff)
-
-
-def _aes_expand_key(key16: bytes):
-    w = [list(key16[i:i + 4]) for i in range(0, 16, 4)]
-    for i in range(4, 44):
-        t = list(w[i - 1])
-        if i % 4 == 0:
-            t = [_AES_SBOX[t[1]], _AES_SBOX[t[2]], _AES_SBOX[t[3]], _AES_SBOX[t[0]]]
-            t[0] ^= _AES_RCON[i // 4 - 1]
-        w.append([w[i - 4][j] ^ t[j] for j in range(4)])
-    return [[b for i in range(4) for b in w[4 * r + i]] for r in range(11)]
-
-
-def _aes_encrypt_block(block, keys):
-    s = [block[i] ^ keys[0][i] for i in range(16)]
-    for rnd in range(1, 10):
-        s = [_AES_SBOX[b] for b in s]
-        s = [
-            s[0], s[5], s[10], s[15],
-            s[4], s[9], s[14], s[3],
-            s[8], s[13], s[2], s[7],
-            s[12], s[1], s[6], s[11],
-        ]
-        out = [0] * 16
-        for c in range(4):
-            a0, a1, a2, a3 = s[4 * c], s[4 * c + 1], s[4 * c + 2], s[4 * c + 3]
-            out[4 * c] = _aes_xtime(a0) ^ (_aes_xtime(a1) ^ a1) ^ a2 ^ a3
-            out[4 * c + 1] = a0 ^ _aes_xtime(a1) ^ (_aes_xtime(a2) ^ a2) ^ a3
-            out[4 * c + 2] = a0 ^ a1 ^ _aes_xtime(a2) ^ (_aes_xtime(a3) ^ a3)
-            out[4 * c + 3] = (_aes_xtime(a0) ^ a0) ^ a1 ^ a2 ^ _aes_xtime(a3)
-        s = [out[i] ^ keys[rnd][i] for i in range(16)]
-    s = [_AES_SBOX[b] for b in s]
-    s = [
-        s[0], s[5], s[10], s[15],
-        s[4], s[9], s[14], s[3],
-        s[8], s[13], s[2], s[7],
-        s[12], s[1], s[6], s[11],
-    ]
-    return [s[i] ^ keys[10][i] for i in range(16)]
-
-
-def encrypt_rawdah(request_dict: dict, key: Optional[str] = None) -> Tuple[str, str]:
-    alphabet = string.ascii_lowercase + string.ascii_uppercase + string.digits
-    key = key or "".join(random.choice(alphabet) for _ in range(16))
-    k = key.encode("utf-8")
-    keys = _aes_expand_key(k)
-    pt = json.dumps(request_dict, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    pad_len = 16 - (len(pt) % 16)
-    pt += bytes([pad_len]) * pad_len
-    out = bytearray()
-    prev = list(k)
-    for i in range(0, len(pt), 16):
-        blk = [pt[i + j] ^ prev[j] for j in range(16)]
-        enc = _aes_encrypt_block(blk, keys)
-        out += bytes(enc)
-        prev = enc
-    b64 = base64.b64encode(bytes(out)).decode("ascii")
-    return key[:4] + b64 + key[4:], key
-
-
-def build_nusuk_headers(
-    bearer_token: Optional[str] = None,
-    device_id: Optional[str] = None,
-    lang: str = "ar",
-    version: Optional[str] = None,
-    timestamp: Optional[str] = None,
-    extra_headers: Optional[Dict[str, str]] = None,
-) -> Dict[str, str]:
-    ts = timestamp or str(int(time.time() * 1000))
-    ver = version or NUSUK_API_VERSION
-    dev_id = device_id or NUSUK_DEVICE_ID
-    h = hashlib.sha256((NUSUK_STATIC_KEY + NUSUK_DYNAMIC_KEY + ts).encode("utf-8")).hexdigest()
-    headers = {
-        "version": ver,
-        "hash": h,
-        "timestamp": ts,
-        "deviceType": "1",
-        "NUSUK_VERSION": ver,
-        "deviceID": dev_id,
-        "x-version": ver,
-        "x-device": dev_id,
-        "os-version": "Android 13 (33)",
-        "Accept": "application/json",
-        "accept-language": lang,
-        "Content-Type": "application/json",
-    }
-    if bearer_token:
-        tok = bearer_token.strip()
-        if not tok.lower().startswith("bearer "):
-            tok = f"Bearer {tok}"
-        headers["Authorization"] = tok
-    if extra_headers:
-        headers.update(extra_headers)
-    return headers
-
-
-def nusuk_http_request(
-    endpoint: str,
-    method: str = "POST",
-    body_dict: Optional[dict] = None,
-    bearer_token: Optional[str] = None,
-    device_id: Optional[str] = None,
-    lang: str = "ar",
-    timeout: int = 25,
-    extra_headers: Optional[Dict[str, str]] = None,
-) -> dict:
-    url = endpoint if endpoint.startswith("http") else (NUSUK_BASE_URL + endpoint.lstrip("/"))
-    headers = build_nusuk_headers(
-        bearer_token=bearer_token,
-        device_id=device_id,
-        lang=lang,
-        extra_headers=extra_headers,
-    )
-    data_bytes = (
-        json.dumps(body_dict, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        if body_dict is not None
-        else None
-    )
-    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method.upper())
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            try:
-                parsed = json.loads(raw)
-            except Exception:
-                parsed = raw
-            return {"ok": True, "http_status": resp.status, "data": parsed}
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", errors="replace")
-        try:
-            parsed = json.loads(raw)
-        except Exception:
-            parsed = raw
-        return {"ok": False, "http_status": e.code, "error": str(e), "data": parsed}
-    except Exception as e:
-        return {"ok": False, "http_status": None, "error": f"{type(e).__name__}: {e}", "data": None}
-
-
-class CancelPermitAPIRequest(BaseModel):
-    bearer_token: str
-    service: str = "rawdah"  # rawdah | reservations
-    reservation_id: Optional[str] = None
-    permit_ids: Optional[List[str]] = None
-    cancel_reason_id: Optional[int] = None
-    payload: Optional[dict] = None
-    encrypt_body: bool = False
-    device_id: Optional[str] = None
-    lang: str = "ar"
-    extra_headers: Optional[Dict[str, str]] = None
-
-
-def build_cancel_permit_payload(req: CancelPermitAPIRequest) -> dict:
-    if req.payload is not None:
-        return req.payload
-    inner: dict = {}
-    if req.reservation_id is not None:
-        inner["ReservationId"] = req.reservation_id
-    if req.permit_ids:
-        inner["Permits"] = [{"PermitId": pid} for pid in req.permit_ids]
-        inner["PermitIds"] = req.permit_ids
-    if req.cancel_reason_id is not None:
-        inner["CancelReasonId"] = req.cancel_reason_id
-    return {"Request": inner} if inner else {}
-
-
-@app.post("/api/rawdah/cancel-permit")
-def rawdah_cancel_permit_api(req: CancelPermitAPIRequest):
-    """إرسال طلب إلغاء حجز/تصريح مباشرة عبر Nusuk API (rawdah/v2/cancelPermit أو reservations/v2/cancelPermit)."""
-    endpoints_map = {
-        "rawdah": "rawdah/v2/cancelPermit",
-        "reservations": "reservations/v2/cancelPermit",
-    }
-    ep = endpoints_map.get((req.service or "rawdah").strip().lower())
-    if not ep:
-        return {"success": False, "error": f"قيمة service غير صحيحة. المتاح: {list(endpoints_map.keys())}"}
-
-    raw_body = build_cancel_permit_payload(req)
-    if not raw_body:
-        return {"success": False, "error": "لازم تبعت payload جاهز أو على الأقل reservation_id / permit_ids"}
-
-    send_body = raw_body
-    if req.encrypt_body:
-        enc_data, _ = encrypt_rawdah(raw_body)
-        send_body = {"data": enc_data}
-
-    log.info(f"🗑️ إرسال طلب إلغاء حجز على {ep} (encrypted={req.encrypt_body})...")
-    res = nusuk_http_request(
-        ep,
-        method="POST",
-        body_dict=send_body,
-        bearer_token=req.bearer_token,
-        device_id=req.device_id,
-        lang=req.lang,
-        extra_headers=req.extra_headers,
-    )
-    return {
-        "success": res["ok"],
-        "endpoint": ep,
-        "encrypted": req.encrypt_body,
-        "sent_request": raw_body,
-        **res,
-    }
 
 
 if __name__ == "__main__":
