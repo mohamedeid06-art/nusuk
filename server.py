@@ -332,11 +332,13 @@ def get_both_nat_versions(raw_nat: str, default_y: int):
         ar_ver = NAT_TO_ARABIC[clean.lower()]
         en_ver = clean
 
-    final_y = 275 if (ar_ver == "مصر" or en_ver.lower() == "egypt") else default_y
+    # تحويل إحداثيات القائمة القديمة (195 / 275) إلى الإحداثيات الجديدة (246 / 323)
+    mapped_default = 246 if default_y == 195 else (323 if default_y == 275 else default_y)
+    final_y = 323 if (ar_ver == "مصر" or en_ver.lower() == "egypt") else mapped_default
     return ar_ver, en_ver, final_y
 
 
-def visible_text_without_inputs(xml_str: str) -> str:
+def visible_text_without_inputs(xml_str: str, min_y: int = 0, max_y: int = 1920) -> str:
     try:
         root = ET.fromstring(xml_str.encode("utf-8"))
     except Exception:
@@ -345,6 +347,13 @@ def visible_text_without_inputs(xml_str: str) -> str:
     for node in root.iter():
         if node.attrib.get("class") == "android.widget.EditText":
             continue
+        if min_y > 0 or max_y < 1920:
+            bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds") or "")
+            if not bm:
+                continue
+            cy = (int(bm.group(2)) + int(bm.group(4))) // 2
+            if not (min_y <= cy <= max_y):
+                continue
         t = node.attrib.get("text") or ""
         d = node.attrib.get("content-desc") or ""
         if t:
@@ -354,16 +363,151 @@ def visible_text_without_inputs(xml_str: str) -> str:
     return " ".join(parts).lower()
 
 
+def wait_country_picker_open(dev, timeout: float = 5.0, interval: float = 0.25) -> bool:
+    """التأكد الفعلي من فتح شاشة اختيار الدولة (وجود مربع البحث العلوي top < 220 أو زر التأكيد السفلي)"""
+    end = time.time() + timeout
+    while True:
+        try:
+            for el in dev(className="android.widget.EditText"):
+                if el.info.get("bounds", {}).get("top", 9999) < 220:
+                    return True
+            dump = strip_arabic_diacritics(dev.dump_hierarchy())
+            if any(k in dump for k in ("اكد اختيارك", "تأكيد الاختيار", "تاكيد الاختيار", "Confirm selection", "Confirm")):
+                return True
+        except Exception:
+            pass
+        if time.time() >= end:
+            return False
+        time.sleep(interval)
+
+
+def click_nationality_result(dev, ar_ver: str, en_ver: str, fallback_y: int) -> bool:
+    """الضغط على نتيجة الجنسية المطابقة من القائمة (مع تجاهل مربع البحث العلوي) ثم الرجوع للإحداثي الجديد كاحتياط"""
+    try:
+        xml_str = dev.dump_hierarchy()
+        root = ET.fromstring(xml_str.encode("utf-8"))
+        targets_exact = {strip_arabic_diacritics(v).strip().lower() for v in (ar_ver, en_ver) if v and v.strip()}
+        exact_hit = None
+        partial_hits = []
+        for node in root.iter():
+            if node.attrib.get("class") == "android.widget.EditText":
+                continue
+            raw_t = (node.attrib.get("text") or "").strip()
+            if not raw_t:
+                continue
+            bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds") or "")
+            if not bm:
+                continue
+            x1, y1, x2, y2 = map(int, bm.groups())
+            cy = (y1 + y2) // 2
+            if not (170 <= cy <= 1760):
+                continue
+            norm_t = strip_arabic_diacritics(raw_t).lower()
+            if norm_t in targets_exact:
+                exact_hit = ((x1 + x2) // 2, cy)
+                break
+            if any(t in norm_t for t in targets_exact):
+                partial_hits.append((len(norm_t), (x1 + x2) // 2, cy))
+        if exact_hit:
+            dev.click(exact_hit[0], exact_hit[1])
+            return True
+        if partial_hits:
+            partial_hits.sort(key=lambda item: item[0])
+            dev.click(partial_hits[0][1], partial_hits[0][2])
+            return True
+    except Exception:
+        pass
+    dev.click(540, fallback_y)
+    return False
+
+
+def ensure_visa_radio_selected(dev, mult: float = 1.0):
+    """ضمان اختيار راديو (رقم التأشيرة) بدون الضغط بالخطأ على (رقم الحدود)"""
+    try:
+        xml_str = dev.dump_hierarchy()
+        root = ET.fromstring(xml_str.encode("utf-8"))
+        for node in root.iter():
+            if node.attrib.get("checkable") == "true":
+                sub_texts = " ".join((c.attrib.get("text") or "") for c in node.iter())
+                sub_clean = strip_arabic_diacritics(sub_texts).lower()
+                if "رقم التاشيرة" in sub_clean or "رقم التأشيرة" in sub_clean or "visa" in sub_clean:
+                    if node.attrib.get("checked") == "true":
+                        return
+                    bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds") or "")
+                    if bm:
+                        cx = (int(bm.group(1)) + int(bm.group(3))) // 2
+                        cy = (int(bm.group(2)) + int(bm.group(4))) // 2
+                        dev.click(cx, cy)
+                        smart_sleep(0.4, mult)
+                        return
+        # في حال لم يُحدد كـ checkable ولكن النص ظاهر فقط، نتحقق إن كان حقل رقم التأشيرة مفتوحاً بالفعل
+        if "رقم التأشيرة" in xml_str:
+            edits = dev(className="android.widget.EditText")
+            if len(edits) >= 2:
+                return
+            if not click_text_in_xml(dev, xml_str, ("رقم التأشيرة", "رقم التاشيرة", "Visa"), min_y=650, max_y=815):
+                dev.click(949, 745)
+            smart_sleep(0.4, mult)
+    except Exception:
+        pass
+
+
+def enter_otp_code(dev, otp: str, fallback_x: int = 160, fallback_y: int = 458, mult: float = 1.0):
+    """كتابة كود الـ OTP في أول خانة (أقصى اليسار) بدقة حسب الإحداثيات الفعلية للخانات"""
+    clicked = False
+    try:
+        edits = dev(className="android.widget.EditText")
+        if len(edits) >= 4:
+            first_box = min(edits, key=lambda el: el.info.get("bounds", {}).get("left", 9999))
+            b = first_box.info.get("bounds", {})
+            cx = (b.get("left", 69) + b.get("right", 252)) // 2
+            cy = (b.get("top", 416) + b.get("bottom", 500)) // 2
+            dev.click(cx, cy)
+            clicked = True
+    except Exception:
+        clicked = False
+    if not clicked:
+        dev.click(fallback_x, fallback_y)
+    smart_sleep(0.2, mult)
+    dev.shell("input keyevent 67 67 67 67")
+    dev.shell(f"input text {otp}")
+    smart_sleep(0.25, mult)
+    dev.shell("input keyevent 111")
+
+
+def dismiss_post_otp_popups(dev, mult: float = 1.0):
+    """إغلاق نافذة تفعيل الموقع (لاحقًا) أو أي نوافذ منبثقة تظهر بعد إدخال OTP"""
+    for _ in range(3):
+        try:
+            dump = dev.dump_hierarchy()
+            if click_text_in_xml(dev, dump, ("لاحقًا", "لاحقا", "تخطي", "Later", "Skip"), min_y=1500, max_y=1900):
+                smart_sleep(0.9, mult)
+                continue
+            if "فعّل الموقع" in dump or "إغلاق الورقة" in dump:
+                dev.click(540, 1796)
+                smart_sleep(0.9, mult)
+                continue
+            break
+        except Exception:
+            break
+    for _ in range(2):
+        dev.click(1000, 100)
+        smart_sleep(0.25, mult)
+
+
 def smart_search_nationality(dev, raw_nat: str, default_y: int, mult: float = 1.0):
     ar_ver, en_ver, final_y = get_both_nat_versions(raw_nat, default_y)
     dump_xml = dev.dump_hierarchy()
-    visible_init = visible_text_without_inputs(dump_xml)
-    if any(eng_c in visible_init for eng_c in ("afghanistan", "albania", "algeria", "bahrain")):
+    # فحص لغة القائمة من عناصر الدول فقط (y=170..1760) لتجاهل زر التأكيد وأيقونة البحث بالعربية
+    list_visible = visible_text_without_inputs(dump_xml, min_y=170, max_y=1760)
+    has_latin_countries = bool(re.search(r"[a-z]{4,}", list_visible))
+    has_ar_countries = bool(re.search(r"[\u0600-\u06FF]{3,}", list_visible))
+    if has_latin_countries and not has_ar_countries:
         is_arabic_screen = False
-    elif any(ar_c in visible_init for ar_c in ("أفغانستان", "افغانستان", "ألبانيا", "الجزائر", "البحرين")):
+    elif has_ar_countries and not has_latin_countries:
         is_arabic_screen = True
     else:
-        is_arabic_screen = bool(re.search(r"[\u0600-\u06FF]", visible_init))
+        is_arabic_screen = False
 
     first_try = ar_ver if is_arabic_screen else en_ver
     second_try = en_ver if is_arabic_screen else ar_ver
@@ -375,10 +519,10 @@ def smart_search_nationality(dev, raw_nat: str, default_y: int, mult: float = 1.
             target_box = min(edits, key=lambda el: el.info.get("bounds", {}).get("top", 9999))
             target_box.click()
         else:
-            dev.click(540, 115)
+            dev.click(562, 95)
     except Exception:
         target_box = None
-        dev.click(540, 115)
+        dev.click(562, 95)
 
     smart_sleep(0.25, mult)
     wrote = False
@@ -389,13 +533,13 @@ def smart_search_nationality(dev, raw_nat: str, default_y: int, mult: float = 1.
         except Exception:
             wrote = False
     if not wrote:
-        dev.click(540, 115)
+        dev.click(562, 95)
         smart_sleep(0.15, mult)
         dev.send_keys(first_try, clear=True)
 
     smart_sleep(0.65, mult)
     after_dump = dev.dump_hierarchy()
-    visible = visible_text_without_inputs(after_dump)
+    visible = visible_text_without_inputs(after_dump, min_y=170, max_y=1760)
     no_result_keywords = ["no result", "not found", "no data", "لا توجد", "لا يوجد", "غير موجود"]
 
     need_fallback = any(k in visible for k in no_result_keywords) or (first_try[:3].lower() not in visible)
@@ -410,12 +554,27 @@ def smart_search_nationality(dev, raw_nat: str, default_y: int, mult: float = 1.
             except Exception:
                 wrote2 = False
         if not wrote2:
-            dev.click(540, 115)
+            dev.click(562, 95)
             smart_sleep(0.15, mult)
             dev.send_keys(second_try, clear=True)
         smart_sleep(0.65, mult)
 
     return final_y
+
+
+def select_and_confirm_nationality(dev, raw_nat: str, default_y: int, mult: float = 1.0, confirm_fallback_y: int = 1854):
+    """البحث عن الجنسية واختيار النتيجة المطابقة ثم الضغط على زر التأكيد (أكّد اختيارك / تأكيد الاختيار)"""
+    ar_ver, en_ver, final_y = get_both_nat_versions(raw_nat, default_y)
+    nat_y = smart_search_nationality(dev, raw_nat, default_y, mult=mult)
+    dev.shell("input keyevent 111")
+    smart_sleep(0.4, mult)
+    click_nationality_result(dev, ar_ver, en_ver, nat_y)
+    smart_sleep(0.45, mult)
+    dump_c = dev.dump_hierarchy()
+    if not click_text_in_xml(dev, dump_c, ("أكد اختيارك", "أكّد اختيارك", "تأكيد الاختيار", "Confirm"), min_y=1700, max_y=1910):
+        dev.click(559, confirm_fallback_y)
+    smart_sleep(0.6, mult)
+    wait_for_network_loading(dev, max_wait=8.0)
 
 
 # ==========================================
@@ -645,12 +804,18 @@ def perform_safe_logout(dev, slow: bool = True):
     dev.swipe(0.5, 0.85, 0.5, 0.15, steps=25)
     time.sleep(1.2)
 
-    log.info("النقر على تسجيل الخروج (540, 1730)...")
-    dev.click(540, 1730)
+    log.info("النقر على تسجيل الخروج (519, 1733)...")
+    dump_lo = dev.dump_hierarchy()
+    if not click_text_in_xml(dev, dump_lo, ("تسجيل خروج", "تسجيل الخروج", "Log out", "Logout"), min_y=1400, max_y=1880):
+        dev.click(519, 1733)
     time.sleep(1.5)
 
     clicked_confirm = False
     for _ in range(3):
+        dump_cf = dev.dump_hierarchy()
+        if click_text_in_xml(dev, dump_cf, ("نعم", "تأكيد", "تسجيل خروج", "موافق", "Yes", "Confirm", "Logout", "Log out"), min_y=900, max_y=1880):
+            clicked_confirm = True
+            break
         for txt in ["نعم", "تأكيد", "ديكأت", "موافق", "Yes", "Confirm", "Logout", "Log out"]:
             btn_confirm = dev(textContains=txt)
             if btn_confirm.exists:
@@ -684,7 +849,7 @@ def pass_welcome_screen_if_needed(dev, mult: float = 1.0) -> bool:
             if btn.exists:
                 btn.click()
             else:
-                dev.click(540, 1768)
+                dev.click(540, 1781)
             smart_sleep(1.2, mult)
             wait_for_network_loading(dev, max_wait=6.0)
             return True
@@ -708,7 +873,7 @@ def open_registration_form(dev, mult: float = 1.0):
             smart_sleep(1.0, mult)
             dump = dev.dump_hierarchy()
 
-        # 1. لو على الشاشة الترحيبية ("هل أنت مستعد لبدء رحلتك؟") نضغط الزر الأسود (540, 1768)
+        # 1. لو على الشاشة الترحيبية ("هل أنت مستعد لبدء رحلتك؟") نضغط الزر الأسود (540, 1781)
         if ("تسجيل الدخول للمتابعة" not in dump and "أنشئ حسابًا جديدًا" not in dump) and any(
             m in dump for m in WELCOME_MARKERS
         ):
@@ -717,11 +882,11 @@ def open_registration_form(dev, mult: float = 1.0):
             if btn_w.exists:
                 btn_w.click()
             else:
-                dev.click(540, 1768)
+                dev.click(540, 1781)
             smart_sleep(1.2, mult)
             dump = dev.dump_hierarchy()
 
-        # 2. الآن على النافذة المنبثقة ("تسجيل الدخول للمتابعة") -> نضغط "أنشئ حسابًا جديدًا" (540, 1704)
+        # 2. الآن على النافذة المنبثقة ("تسجيل الدخول للمتابعة") -> نضغط "أنشئ حسابًا جديدًا" (519, 1714)
         clicked = False
         for txt in CREATE_MARKERS:
             if txt in dump:
@@ -734,7 +899,7 @@ def open_registration_form(dev, mult: float = 1.0):
                     break
 
         if not clicked:
-            dev.click(540, 1704)
+            dev.click(519, 1714)
 
         inputs = wait_edits(dev, 3, timeout=4.5 * mult)
         if inputs is not None:
@@ -804,7 +969,7 @@ def force_clean_login_state(dev, emu_key: str) -> bool:
         time.sleep(0.6)
         dev.click(1019, 91)
         time.sleep(0.8)
-        dev.click(65, 101)
+        dev.click(61, 101)
         time.sleep(1.8)
         perform_safe_logout(dev, slow=True)
     except Exception:
@@ -844,6 +1009,9 @@ def reopen_nusuk_app(dev, emu_key: str, mult: float = 1.0) -> bool:
         # التأكد من اختفاء أي نوافذ وظهور الشاشة الرئيسية
         for _ in range(10):
             dump = dev.dump_hierarchy()
+            if "فعّل الموقع" in dump or "لاحقًا" in dump:
+                dismiss_post_otp_popups(dev, mult=mult)
+                continue
             if any(h in dump for h in ("المحفظة", "العمرة", "الروضة", "نسك AI", "حجز تصريح")):
                 log.info(f"[✓] [{label}] تم فتح تطبيق نسك والوصول للشاشة الرئيسية بنجاح!")
                 return True
@@ -889,26 +1057,46 @@ def save_failure_artifacts(dev, tag: str) -> Optional[str]:
 # ==========================================
 # استخراج بيانات الملف الشخصي + إدارة صفحة الأصدقاء
 # ==========================================
-def click_text_in_xml(dev, xml_str: str, targets: tuple, min_y: int = 0, max_y: int = 1920) -> bool:
-    """البحث عن نص داخل XML الملتقط (مع تجاهل التشكيل والشدّة) والضغط على مركز العنصر فوراً بدون استدعاءات RPC إضافية"""
+def click_text_in_xml(dev, xml_str: str, targets: tuple, min_y: int = 0, max_y: int = 1920, skip_edits: bool = True) -> bool:
+    """البحث عن نص داخل XML الملتقط (بترتيب أولوية targets وتفضيل التطابق الكامل وتجاهل التشكيل) والضغط على مركز العنصر"""
     try:
         root = ET.fromstring(xml_str.encode("utf-8"))
-        lowered_targets = [strip_arabic_diacritics(t).lower() for t in targets]
+        lowered_targets = [strip_arabic_diacritics(t).strip().lower() for t in targets if t]
+        candidates = []
         for node in root.iter():
+            if skip_edits and node.attrib.get("class") == "android.widget.EditText":
+                continue
             t = strip_arabic_diacritics(node.attrib.get("text") or "").strip().lower()
             d = strip_arabic_diacritics(node.attrib.get("content-desc") or "").strip().lower()
             if not t and not d:
                 continue
-            if any(lt in t or lt in d for lt in lowered_targets):
-                bounds = node.attrib.get("bounds") or ""
-                bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
-                if bm:
-                    x1, y1, x2, y2 = map(int, bm.groups())
-                    cy = (y1 + y2) // 2
-                    if min_y <= cy <= max_y:
-                        cx = (x1 + x2) // 2
-                        dev.click(cx, cy)
-                        return True
+            bounds = node.attrib.get("bounds") or ""
+            bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+            if not bm:
+                continue
+            x1, y1, x2, y2 = map(int, bm.groups())
+            cy = (y1 + y2) // 2
+            if min_y <= cy <= max_y:
+                candidates.append((t, d, (x1 + x2) // 2, cy))
+
+        # 1. التطابق التام أولاً حسب ترتيب أولوية targets
+        for lt in lowered_targets:
+            for t, d, cx, cy in candidates:
+                if t == lt or d == lt:
+                    dev.click(cx, cy)
+                    return True
+
+        # 2. الاحتواء الجزئي حسب ترتيب أولوية targets (مع تفضيل النص الأقصر لتجنب الفقرات الوصفية)
+        for lt in lowered_targets:
+            sub_hits = []
+            for t, d, cx, cy in candidates:
+                if lt in t or lt in d:
+                    matched_len = len(t) if lt in t else len(d)
+                    sub_hits.append((matched_len, cx, cy))
+            if sub_hits:
+                sub_hits.sort(key=lambda item: item[0])
+                dev.click(sub_hits[0][1], sub_hits[0][2])
+                return True
     except Exception:
         pass
     return False
@@ -978,24 +1166,32 @@ def ensure_leader_on_friends_page(dev1, mult: float = 1.0) -> bool:
         leader_id_val = (STATE.get("group") or {}).get("leader_id") or ""
         if any(m in dump1 for m in profile_markers) or (leader_id_val and leader_id_val in dump1):
             if not click_text_in_xml(dev1, dump1, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
-                dev1.click(140, 1025)
+                dev1.click(127, 1021)
             smart_sleep(1.3, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
-        elif any(m in dump1 for m in ("التصاريح", "Permits", "أكمل", "نوع الهوية")):
+        elif "نوع الهوية" in dump1:
+            dev1.click(58, 91)
+            smart_sleep(1.3, mult)
+            wait_for_network_loading(dev1, max_wait=6.0)
+            dump_prof = dev1.dump_hierarchy()
+            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
+                dev1.click(127, 1021)
+            smart_sleep(1.3, mult)
+        elif any(m in dump1 for m in ("التصاريح", "Permits", "أكمل", "طلباتي", "المواعيد", "لا توجد طلبات", "My Requests")):
             dev1.click(1019, 91)
             smart_sleep(1.3, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
             dump_prof = dev1.dump_hierarchy()
             if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
-                dev1.click(140, 1025)
+                dev1.click(127, 1021)
             smart_sleep(1.3, mult)
         else:
-            dev1.click(65, 101)
+            dev1.click(61, 101)
             smart_sleep(1.5, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
             dump_prof = dev1.dump_hierarchy()
             if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
-                dev1.click(140, 1025)
+                dev1.click(127, 1021)
             smart_sleep(1.3, mult)
 
     return is_on_friends_show_all_page(dev1.dump_hierarchy())
@@ -1014,7 +1210,7 @@ def _click_add_friend_on_show_all(dev1, comp_num: int, mult: float = 1.0):
         if click_text_in_xml(dev1, dump2, add_labels, min_y=350, max_y=1850):
             return
     if comp_num == 1:
-        dev1.click(540, 1151)
+        dev1.click(540, 1118)
     elif comp_num == 2:
         dev1.click(804, 943)
     else:
@@ -1041,7 +1237,7 @@ def open_add_friend_and_send_request(dev1, comp_id: str, comp_num: int, mult: fl
     try:
         b = id_box.info.get("bounds", {})
         cx = (b.get("left", 100) + b.get("right", 980)) // 2
-        cy = (b.get("top", 400) + b.get("bottom", 490)) // 2
+        cy = (b.get("top", 368) + b.get("bottom", 455)) // 2
         dev1.click(cx, cy)
         smart_sleep(0.2, mult)
         id_box.set_text(comp_id)
@@ -1050,7 +1246,7 @@ def open_add_friend_and_send_request(dev1, comp_id: str, comp_num: int, mult: fl
         wrote_id = False
 
     if not wrote_id:
-        dev1.click(540, 445)
+        dev1.click(540, 411)
         smart_sleep(0.25, mult)
         dev1.send_keys(comp_id, clear=True)
 
@@ -1058,16 +1254,20 @@ def open_add_friend_and_send_request(dev1, comp_id: str, comp_num: int, mult: fl
     dev1.shell("input keyevent 111")
     smart_sleep(0.35, mult)
 
-    dev1.click(540, 1742)
+    dump_af = dev1.dump_hierarchy()
+    if not click_text_in_xml(dev1, dump_af, ("أضف صديق", "اضف صديق", "إضافة صديق", "Add friend", "Add Friend"), min_y=1650, max_y=1815):
+        dev1.click(540, 1756)
     smart_sleep(1.5, mult)
     wait_for_network_loading(dev1, max_wait=10.0)
 
     # تأكيد إغلاق نافذة الإدخال وإرسال الطلب فعلياً
     if is_add_friend_dialog_open(dev1):
-        log.warning("نافذة إدخال الصديق ما زالت مفتوحة - إعادة الضغط على زر الإرسال (540, 1742)...")
+        log.warning("نافذة إدخال الصديق ما زالت مفتوحة - إعادة الضغط على زر الإرسال (540, 1756)...")
         dev1.shell("input keyevent 111")
         smart_sleep(0.3, mult)
-        dev1.click(540, 1742)
+        dump_af2 = dev1.dump_hierarchy()
+        if not click_text_in_xml(dev1, dump_af2, ("أضف صديق", "اضف صديق", "إضافة صديق", "Add friend", "Add Friend"), min_y=1650, max_y=1815):
+            dev1.click(540, 1756)
         smart_sleep(1.5, mult)
         wait_for_network_loading(dev1, max_wait=8.0)
         if is_add_friend_dialog_open(dev1):
@@ -1083,7 +1283,7 @@ def fast_extract_id_and_name(dev, max_wait: float = 4.0) -> Tuple[Optional[str],
     while time.time() - start_t < max_wait:
         xml_str = dev.dump_hierarchy()
 
-        m = re.search(r"Nusuk ID\s*(\d+)", xml_str, re.IGNORECASE)
+        m = re.search(r"(?:Nusuk ID|رقم\s*هوية\s*نسك)\s*(\d+)", xml_str, re.IGNORECASE)
         if m:
             nusuk_id = m.group(1)
         else:
@@ -1122,16 +1322,20 @@ def reach_profile_and_extract_id(dev, mult: float = 1.0) -> Tuple[Optional[str],
     dump = dev.dump_hierarchy()
     dump_low = dump.lower()
     if any(k in dump_low for k in SUCCESS_KEYS):
-        dev.click(540, 1793)
+        if not click_text_in_xml(dev, dump, ("تابع واستكشف", "Continue Exploring", "استكشف"), min_y=1650, max_y=1880):
+            dev.click(540, 1796)
         smart_sleep(1.3, mult)
         wait_for_network_loading(dev, max_wait=6.0)
         dev.click(1019, 91)
         smart_sleep(1.5, mult)
-    elif any(k in dump for k in ("التصاريح", "Permits", "أكمل", "نوع الهوية")):
+    elif "نوع الهوية" in dump:
+        dev.click(58, 91)
+        smart_sleep(1.5, mult)
+    elif any(k in dump for k in ("التصاريح", "Permits", "أكمل", "طلباتي", "المواعيد", "لا توجد طلبات", "My Requests")):
         dev.click(1019, 91)
         smart_sleep(1.5, mult)
     else:
-        dev.click(65, 101)
+        dev.click(61, 101)
         smart_sleep(1.5, mult)
 
     wait_for_network_loading(dev, max_wait=6.0)
@@ -1176,14 +1380,39 @@ def close_leader_group(dev1) -> bool:
 # ==========================================
 # فحص تصاريح الروضة ونظام استرجاع الحساب
 # ==========================================
+def _is_cancelled_permit_status(status: str) -> bool:
+    s = strip_arabic_diacritics(status or "").strip().lower()
+    return any(k in s for k in ("ملغى", "ملغي", "ملغاه", "ملغاة", "الغاء", "إلغاء", "cancel"))
+
+
+def _is_used_or_expired_permit_status(status: str) -> bool:
+    if _is_cancelled_permit_status(status):
+        return False
+    s = strip_arabic_diacritics(status or "").strip().lower()
+    # تجاهل عبارة "من قبل المستخدم" حتى لو ظهرت بصيغة أخرى
+    s_clean = s.replace("المستخدم", "").strip()
+    return any(k in s_clean for k in ("مستخدم", "منتهي", "منته", "used", "expired", "completed"))
+
+
+def _is_active_permit_status(status: str) -> bool:
+    if _is_cancelled_permit_status(status):
+        return False
+    s = strip_arabic_diacritics(status or "").strip().lower()
+    return any(k in s for k in (
+        "مؤكد", "موكد", "منتظر التاكيد", "بانتظار التاكيد", "ساري", "قادم", "فعال",
+        "confirmed", "active", "pending", "upcoming", "valid",
+    ))
+
+
 def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
     """
-    فحص تصاريح الروضة الشريفة من شاشة المواعيد:
+    فحص تصاريح الروضة الشريفة من شاشة المواعيد (عربي وإنجليزي):
+    - التصريح الملغي (ملغى من قبل المستخدم / Cancelled) لا يمنع الحجز ويُستثنى تماماً
     - لو حاجز لنفسه حالياً (مؤكد / منتظر التأكيد / ساري) -> مينفعش
     - لو مستخدم أو منتهي:
-      - لو عدى 365 يوم على أحدث تصريح -> ينفع
+      - لو عدى 365 يوم على أحدث تصريح مستخدم/منتهي -> ينفع
       - لو لم يمر 365 يوم -> مينفعش
-    - لو لا توجد أي تصاريح روضة سابقة -> ينفع
+    - لو لا توجد أي تصاريح روضة سارية أو مستخدمة -> ينفع
     """
     try:
         root = ET.fromstring(xml_str.encode("utf-8"))
@@ -1191,46 +1420,69 @@ def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
     except Exception:
         nodes = []
 
+    en_months = {
+        "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+        "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+        "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+        "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+    }
+    status_markers = (
+        "ملغى", "ملغي", "ملغاة", "cancel",
+        "مستخدم", "منتهي", "ساري", "مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد",
+        "used", "expired", "confirmed", "active", "pending", "upcoming",
+    )
+
     permits = []
     curr = None
     for t in nodes:
-        if "رقم الحجز" in t:
+        t_clean = strip_arabic_diacritics(t).lower()
+        if "رقم الحجز" in t or "reservation" in t_clean or "booking" in t_clean:
             if curr:
                 permits.append(curr)
             curr = {"id": t, "type": "", "status": "", "date_str": "", "time_str": "", "date": None}
         elif curr:
-            if "تصريح الروضة" in t:
+            if "تصريح الروضة" in t or "الروضة" in t or "rawdah" in t_clean or "rawda" in t_clean:
                 curr["type"] = t
-            elif any(s in t for s in ("مستخدم", "منتهي", "ساري", "ملغى", "ملغي", "مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد")):
+            elif any(s in t_clean for s in status_markers) and not curr["status"]:
                 curr["status"] = t
-            elif re.match(r"^\d{1,2}:\d{2}$", t):
+            elif re.match(r"^\d{1,2}:\d{2}(\s*[APMapm]{2})?$", t):
                 curr["time_str"] = t
             else:
-                m = re.match(r"(\d{1,2})\s+([\u0621-\u064A]+)\s+(\d{4})", t)
-                if m:
-                    day, mon_name, yr = int(m.group(1)), m.group(2), int(m.group(3))
+                m_ar = re.match(r"(\d{1,2})\s+([\u0621-\u064A]+)\s+(\d{4})", t)
+                if m_ar:
+                    day, mon_name, yr = int(m_ar.group(1)), m_ar.group(2), int(m_ar.group(3))
                     mon = AR_MONTHS.get(mon_name)
+                    if mon:
+                        curr["date_str"] = t
+                        curr["date"] = datetime(yr, mon, day)
+                        continue
+                m_en = re.match(r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})", t)
+                if m_en:
+                    day, mon_name, yr = int(m_en.group(1)), m_en.group(2).lower(), int(m_en.group(3))
+                    mon = en_months.get(mon_name)
                     if mon:
                         curr["date_str"] = t
                         curr["date"] = datetime(yr, mon, day)
     if curr:
         permits.append(curr)
 
-    rawdah_permits = [p for p in permits if "الروضة" in p.get("type", "")]
+    rawdah_permits = [
+        p for p in permits
+        if any(k in strip_arabic_diacritics(p.get("type", "")).lower() for k in ("الروضة", "الروضه", "rawdah", "rawda"))
+    ]
 
-    # 1. هل المعتمر حاجز لنفسه حالياً (مؤكد أو بانتظار التأكيد)؟
-    active_keywords = ("مؤكد", "مؤكّد", "منتظر التأكيد", "بانتظار التأكيد", "ساري", "قادم", "فعال")
-    active_rawdah = [p for p in rawdah_permits if any(k in p.get("status", "") for k in active_keywords)]
+    # 1. هل المعتمر حاجز لنفسه حالياً (مؤكد أو بانتظار التأكيد أو ساري — مع استثناء الملغي تماماً)؟
+    active_rawdah = [p for p in rawdah_permits if _is_active_permit_status(p.get("status", ""))]
     if active_rawdah:
         p = active_rawdah[0]
         date_disp = p.get("date_str") or "محدد"
         time_disp = p.get("time_str") or ""
         stat_disp = p.get("status") or "مؤكد"
         reason = f"مينفعش - المعتمر حاجز لنفسه تصريح روضة ({stat_disp}) بتاريخ {date_disp} {time_disp}".strip()
-        return False, reason, {"status": stat_disp, "date": date_disp, "time": time_disp, "type": p.get("type")}
+        return False, reason, {"status": stat_disp, "date": date_disp, "time": time_disp, "type": p.get("type"), "cancelled": False}
 
-    # 2. فحص التصاريح السابقة (مستخدم / منتهي)
-    used_rawdah = [p for p in rawdah_permits if any(k in p.get("status", "") for k in ("مستخدم", "منتهي")) and p.get("date")]
+    # 2. فحص التصاريح السابقة المستخدمة / المنتهية فعلياً (مع استثناء "ملغى من قبل المستخدم" تماماً!)
+    used_rawdah = [p for p in rawdah_permits if _is_used_or_expired_permit_status(p.get("status", "")) and p.get("date")]
     now = datetime.now()
     if used_rawdah:
         latest = max(used_rawdah, key=lambda x: x["date"])
@@ -1238,14 +1490,23 @@ def evaluate_rawdah_permits_from_xml(xml_str: str) -> Tuple[bool, str, dict]:
         date_disp = latest.get("date_str") or str(latest["date"].date())
         if days_passed >= 365:
             reason = f"ينفع - عدى أكثر من سنة ({days_passed} يوم) على آخر تصريح روضة بتاريخ {date_disp}"
-            return True, reason, {"status": latest.get("status"), "date": date_disp, "days_passed": days_passed, "type": latest.get("type")}
+            return True, reason, {"status": latest.get("status"), "date": date_disp, "days_passed": days_passed, "type": latest.get("type"), "cancelled": False}
         else:
             reason = f"مينفعش - دخل الروضة بتاريخ {date_disp} (مر فقط {days_passed} يوم ولم يكمل سنة)"
-            return False, reason, {"status": latest.get("status"), "date": date_disp, "days_passed": days_passed, "type": latest.get("type")}
+            return False, reason, {"status": latest.get("status"), "date": date_disp, "days_passed": days_passed, "type": latest.get("type"), "cancelled": False}
 
-    # 3. لا توجد تصاريح روضة مستخدمة أو مؤكدة
+    # 3. هل يوجد فقط تصاريح ملغاة؟
+    cancelled_rawdah = [p for p in rawdah_permits if _is_cancelled_permit_status(p.get("status", ""))]
+    if cancelled_rawdah:
+        p = cancelled_rawdah[0]
+        date_disp = p.get("date_str") or ""
+        stat_disp = p.get("status") or "ملغى"
+        reason = f"ينفع - الحجز ملغي ({stat_disp}{(' بتاريخ ' + date_disp) if date_disp else ''}) ولا توجد تصاريح سارية أو مستخدمة"
+        return True, reason, {"status": stat_disp, "date": date_disp or None, "type": p.get("type"), "cancelled": True}
+
+    # 4. لا توجد تصاريح روضة مستخدمة أو مؤكدة
     reason = "ينفع - لا توجد أي تصاريح روضة سابقة للمعتمر"
-    return True, reason, {"status": "none", "date": None}
+    return True, reason, {"status": "none", "date": None, "cancelled": False}
 
 
 def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, mult: float = 1.0) -> dict:
@@ -1284,14 +1545,16 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         log.info(f"[{label}] تم فتح شاشة 'تسجيل الحساب من جديد' مباشرة ✓")
     elif "استعد حسابك" in dump_clean or "استعادة حسابك" in dump_clean:
         if not click_text_in_xml(dev, dump, ("استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1850):
-            dev.click(780, 1650)
+            dev.click(943, 1657)
         smart_sleep(1.5, mult)
         wait_for_network_loading(dev, max_wait=8.0)
     elif "لديك مشكلة" in dump_clean:
         if not click_text_in_xml(dev, dump, ("لديك مشكلة",), min_y=600, max_y=1200):
-            dev.click(500, 845)
+            dev.click(540, 846)
         smart_sleep(1.2, mult)
-        dev.click(780, 1650)
+        dump_tr = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_tr, ("استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1850):
+            dev.click(943, 1657)
         smart_sleep(1.5, mult)
         wait_for_network_loading(dev, max_wait=8.0)
     else:
@@ -1301,46 +1564,45 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
             dump_clean = strip_arabic_diacritics(dump)
 
         if any(m in dump_clean for m in WELCOME_MARKERS) or "تسجيل الدخول أو إنشاء حساب" in dump_clean:
-            dev.click(540, 1768)
+            if not click_text_in_xml(dev, dump, ("تسجيل الدخول أو إنشاء حساب", "Login or Sign up", "Log in or Sign up"), min_y=1650, max_y=1860):
+                dev.click(540, 1781)
             smart_sleep(1.2, mult)
 
         dump_sheet = dev.dump_hierarchy()
         dump_sheet_clean = strip_arabic_diacritics(dump_sheet)
         if "الدخول بواسطة البريد" in dump_sheet_clean or "البريد الإلكتروني" in dump_sheet_clean:
             if not click_text_in_xml(dev, dump_sheet, ("الدخول بواسطة البريد",), min_y=1200, max_y=1700):
-                dev.click(796, 1484)
+                dev.click(869, 1528)
             smart_sleep(1.2, mult)
 
-        dev.click(500, 845)
+        dump_el = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_el, ("لديك مشكلة",), min_y=600, max_y=1200):
+            dev.click(540, 846)
         smart_sleep(1.2, mult)
-        dev.click(780, 1650)
+        dump_tr = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_tr, ("استعد حسابك", "استعادة حسابك"), min_y=1400, max_y=1850):
+            dev.click(943, 1657)
         smart_sleep(1.5, mult)
         wait_for_network_loading(dev, max_wait=8.0)
 
-    # 2. شاشة "تسجيل الحساب من جديد" -> الضغط على "كافة الزوار" (540, 1690)
+    # 2. شاشة "تسجيل الحساب من جديد" -> الضغط على "كافة الزوار" (809, 1702)
     dump_rec = dev.dump_hierarchy()
     dump_rec_clean = strip_arabic_diacritics(dump_rec)
     if "كافة الزوار" in dump_rec_clean or "زائر دولي" in dump_rec_clean:
-        if not click_text_in_xml(dev, dump_rec, ("كافة الزوار", "زائر دولي"), min_y=500, max_y=1850):
-            dev.click(540, 1690)
+        if not click_text_in_xml(dev, dump_rec, ("كافة الزوار", "زائر دولي"), min_y=1550, max_y=1850):
+            dev.click(809, 1702)
     else:
-        dev.click(540, 1690)
+        dev.click(809, 1702)
     smart_sleep(1.2, mult)
     wait_for_network_loading(dev, max_wait=8.0)
 
-    # 3. اختيار الجنسية
-    nat_y = smart_search_nationality(dev, raw_nat, default_nat_y, mult=mult)
-    dev.shell("input keyevent 111")
-    smart_sleep(0.4, mult)
-    dev.click(540, nat_y)
-    smart_sleep(0.4, mult)
-    dev.click(540, 1850)
-    wait_for_network_loading(dev, max_wait=8.0)
+    # 3. اختيار الجنسية (القائمة الجديدة: صف 1 عند 246، مصر عند 323، تأكيد الاختيار عند 559, 1822)
+    wait_country_picker_open(dev, timeout=4.5 * mult)
+    select_and_confirm_nationality(dev, raw_nat, default_nat_y, mult=mult, confirm_fallback_y=1822)
 
-    # 4. إدخال الجواز ورقم التأشيرة (مع أولوية set_text لضمان عدم ضياع أي حرف)
+    # 4. إدخال الجواز ورقم التأشيرة (رقم التأشيرة محدد افتراضياً على اليمين؛ نتحقق دون النقر على رقم الحدود)
     smart_sleep(0.8, mult)
-    dev.click(485, 770)  # اختيار راديو التأشيرة
-    smart_sleep(0.5, mult)
+    ensure_visa_radio_selected(dev, mult=mult)
 
     rec_inputs = wait_edits(dev, 2, timeout=3.5 * mult)
     if rec_inputs is not None and len(rec_inputs) >= 2:
@@ -1349,12 +1611,12 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         rec_inputs[1].set_text(visa_val)
         smart_sleep(0.2, mult)
     else:
-        dev.click(540, 600)  # جواز السفر
+        dev.click(540, 576)  # جواز السفر
         smart_sleep(0.3, mult)
         dev.send_keys(passport_val, clear=True)
         smart_sleep(0.3, mult)
 
-        dev.click(540, 890)  # رقم التأشيرة
+        dev.click(540, 859)  # رقم التأشيرة
         smart_sleep(0.3, mult)
         dev.send_keys(visa_val, clear=True)
         smart_sleep(0.3, mult)
@@ -1362,8 +1624,10 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     dev.shell("input keyevent 111")
     smart_sleep(0.4, mult)
 
-    # الضغط على زر "التحقق من حسابك" (540, 1010)
-    dev.click(540, 1010)
+    # الضغط على زر "التحقق من حسابك" (560, 989)
+    dump_vrf = dev.dump_hierarchy()
+    if not click_text_in_xml(dev, dump_vrf, ("التحقق من حسابك", "تحقق من حسابك", "Verify"), min_y=880, max_y=1150):
+        dev.click(560, 989)
     smart_sleep(1.5, mult)
     wait_for_network_loading(dev, max_wait=12.0)
 
@@ -1388,9 +1652,11 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     dev.shell("input keyevent 111")
     smart_sleep(0.4, mult)
 
-    # الضغط على زر "تأكيد البريد الإلكتروني" (540, 1055)
+    # الضغط على زر "تأكيد البريد الإلكتروني" (560, 1041)
     otp_sent_at = time.time()
-    dev.click(540, 1055)
+    dump_em = dev.dump_hierarchy()
+    if not click_text_in_xml(dev, dump_em, ("تأكيد البريد الإلكتروني", "تأكيد البريد", "Confirm"), min_y=700, max_y=1250):
+        dev.click(560, 1041)
     smart_sleep(1.8, mult)
     wait_for_network_loading(dev, max_wait=12.0)
 
@@ -1400,12 +1666,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     if not otp:
         raise FlowError("لم يتم استلام كود OTP لاسترجاع الحساب")
 
-    dev.click(160, 240)
-    smart_sleep(0.2, mult)
-    dev.shell("input keyevent 67 67 67 67")
-    dev.shell(f"input text {otp}")
-    smart_sleep(0.4, mult)
-    dev.shell("input keyevent 111")
+    enter_otp_code(dev, otp, fallback_x=160, fallback_y=458, mult=mult)
 
     # انتظار ظهور نافذة "تم استعادة حسابك بنجاح" والضغط على الزر الأسود (تابع واستكشف)
     log.info(f"[{label}] انتظار نافذة تم استعادة حسابك بنجاح والضغط على الزر الأسود...")
@@ -1414,26 +1675,29 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     for _ in range(25):
         dump_succ = dev.dump_hierarchy()
         if any(w in dump_succ for w in ("استعادة حسابك بنجاح", "استعادة حسابك", "تابع واستكشف", "استكشف")):
-            if not click_text_in_xml(dev, dump_succ, ("تابع واستكشف", "استكشف", "تابع"), min_y=1600, max_y=1900):
-                dev.click(540, 1793)
+            if not click_text_in_xml(dev, dump_succ, ("تابع واستكشف", "Continue Exploring", "استكشف"), min_y=1720, max_y=1900):
+                dev.click(540, 1796)
             log.info(f"[{label}] تم الضغط على الزر الأسود (تابع واستكشف) بنجاح!")
             clicked_explore = True
             break
         if "تأكيد البريد الإلكتروني" in dump_succ:
-            click_text_in_xml(dev, dump_succ, ("تأكيد البريد الإلكتروني",), min_y=700, max_y=950)
+            click_text_in_xml(dev, dump_succ, ("تأكيد البريد الإلكتروني",), min_y=620, max_y=950)
         time.sleep(0.6)
 
     if not clicked_explore:
-        dev.click(540, 1793)
+        dev.click(540, 1796)
 
-    smart_sleep(1.2, mult)
+    smart_sleep(1.5, mult)
+    dismiss_post_otp_popups(dev, mult=mult)
 
-    # إغلاق التطبيق وإعادة فتحه دائماً بعد كتابة OTP والضغط على الزر الأسود لضمان الاستقرار والدخول النظيف
-    log.info(f"🔄 [{label}] إعادة تشغيل تطبيق نسك بعد الاسترجاع والزر الأسود للوصول النظيف للشاشة الرئيسية...")
-    reopen_nusuk_app(dev, emu_key, mult=mult)
+    # إذا لم يصل للشاشة الرئيسية نعيد فتح التطبيق لضمان الاستقرار والدخول النظيف
+    dump_after_exp = dev.dump_hierarchy()
+    if not any(h in dump_after_exp for h in ("المحفظة", "العمرة", "الروضة", "نسك AI", "حجز تصريح")):
+        log.info(f"🔄 [{label}] إعادة تشغيل تطبيق نسك بعد الاسترجاع والزر الأسود للوصول النظيف للشاشة الرئيسية...")
+        reopen_nusuk_app(dev, emu_key, mult=mult)
 
-    # 7. الضغط على دائرة البروفايل (أعلى اليسار 65, 101)
-    dev.click(65, 101)
+    # 7. الضغط على دائرة البروفايل (أعلى اليسار 61, 101)
+    dev.click(61, 101)
     smart_sleep(1.8, mult)
     wait_for_network_loading(dev, max_wait=8.0)
 
@@ -1447,10 +1711,10 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
 
     log.info(f"[{label}] تم استرجاع البروفايل: {pname} | ID: {nid}")
 
-    # 8. الضغط على كرت "التصاريح السارية" (750, 1780)
+    # 8. الضغط على كرت "التصاريح السارية"
     dump_cards = dev.dump_hierarchy()
     if not click_text_in_xml(dev, dump_cards, ("التصاريح السارية", "Active Permits"), min_y=1500, max_y=1920):
-        dev.click(750, 1780)
+        dev.click(807, 1786)
     smart_sleep(2.0, mult)
     wait_for_network_loading(dev, max_wait=10.0)
 
@@ -1515,7 +1779,7 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     for attempt in range(2):
         dev2.click(1019, 91)
         time.sleep(1.0)
-        dev2.click(65, 101)
+        dev2.click(61, 101)
         time.sleep(2.0)
         wait_for_network_loading(dev2, max_wait=10.0)
         dump_dev2 = dev2.dump_hierarchy()
@@ -1825,9 +2089,11 @@ def _run_register(req: RegisterRequest) -> dict:
         dev.shell("input keyevent 111")
         smart_sleep(0.4, mult)
 
-        # الضغط على زر التأكيد النهائي (أنشئ حسابك) بعد ملء الـ 3 خانات في إحداثياته الجديدة (558, 1138)
+        # الضغط على زر التأكيد النهائي (أنشئ حسابك) بعد ملء الـ 3 خانات في إحداثياته الجديدة (559, 1122)
         otp_sent_at = time.time()
-        dev.click(558, 1138)
+        dump_reg_submit = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_reg_submit, ("أنشئ حسابك", "انشئ حسابك", "Create Account", "Create"), min_y=700, max_y=1400):
+            dev.click(559, 1122)
         smart_sleep(1.8, mult)
         wait_for_network_loading(dev, max_wait=12.0)
 
@@ -1836,73 +2102,72 @@ def _run_register(req: RegisterRequest) -> dict:
         if not otp:
             raise FlowError("لم يتم استلام كود OTP")
 
-        dev.click(160, 462)
-        smart_sleep(0.2, mult)
-        dev.shell("input keyevent 67 67 67 67")
-        dev.shell(f"input text {otp}")
-        smart_sleep(0.2, mult)
-        dev.shell("input keyevent 111")
+        enter_otp_code(dev, otp, fallback_x=160, fallback_y=458, mult=mult)
 
-        # 4. انتظار انتهاء تحميل الـ OTP ثم 3 نقرات تنظيف
+        # 4. انتظار انتهاء تحميل الـ OTP ثم إغلاق نافذة تفعيل الموقع (لاحقًا) وأي نوافذ منبثقة
         smart_sleep(1.8, mult)
         wait_for_network_loading(dev, max_wait=12.0)
-        for _ in range(3):
-            dev.click(1000, 100)
-            smart_sleep(0.3, mult)
+        dismiss_post_otp_popups(dev, mult=mult)
 
-        # 5. الدخول للملف الشخصي ثم Active Permits ثم Complete Profile
-        dev.click(65, 101)
+        # 5. الدخول للملف الشخصي ثم التصاريح السارية ثم أكمل الملف الشخصي
+        dev.click(61, 101)
         smart_sleep(1.6, mult)
         wait_for_network_loading(dev, max_wait=8.0)
 
-        dev.click(807, 1786)
+        dump_prof_s5 = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_prof_s5, ("التصاريح السارية", "Active Permits"), min_y=1500, max_y=1920):
+            dev.click(944, 1825)
         smart_sleep(1.3, mult)
         wait_for_network_loading(dev, max_wait=8.0)
         dump_step5 = dev.dump_hierarchy()
         if "عرض الكل" in dump_step5 or "بطاقاتي" in dump_step5 or "Show All" in dump_step5:
-            dev.click(807, 1786)
+            if not click_text_in_xml(dev, dump_step5, ("التصاريح السارية", "Active Permits"), min_y=1500, max_y=1920):
+                dev.click(807, 1786)
             smart_sleep(1.2, mult)
             wait_for_network_loading(dev, max_wait=6.0)
 
-        dev.click(540, 1793)
+        dump_comp_sheet = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_comp_sheet, ("أكمل الملف الشخصي", "اكمل الملف الشخصي", "Complete Profile"), min_y=1650, max_y=1880):
+            dev.click(540, 1796)
         smart_sleep(1.3, mult)
 
-        # 6. اختيار زائر دولي
-        dev.click(540, 886)
+        # 6. اختيار زائر دولي / كافة الزوار (540, 852)
+        dump_id_type = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_id_type, ("كافة الزوار", "زائر دولي", "International"), min_y=700, max_y=1050):
+            dev.click(540, 852)
         smart_sleep(1.3, mult)
+        wait_for_network_loading(dev, max_wait=6.0)
 
-        # 7. اختيار الجنسية
+        # 7. اختيار الجنسية (الشاشة الموحدة الجديدة: قائمة الدولة عند 540, 457)
         raw_nat = str(req.nationality or req.nationality_text or req.search_text or p.get("nationality") or "مصر").strip()
-        default_nat_y = int(req.nationality_y or req.option_y or req.choice_y or 275)
+        default_nat_y = int(req.nationality_y or req.option_y or req.choice_y or 323)
 
-        dev.click(540, 491)
-        if wait_edits(dev, 1, timeout=4.5 * mult) is None:
+        dev.click(540, 457)
+        if not wait_country_picker_open(dev, timeout=4.5 * mult):
             dump_step6 = dev.dump_hierarchy()
             if "نوع الهوية" in dump_step6 or "زائر دولي" in dump_step6 or "International" in dump_step6:
-                dev.click(540, 886)
+                if not click_text_in_xml(dev, dump_step6, ("كافة الزوار", "زائر دولي", "International"), min_y=700, max_y=1050):
+                    dev.click(540, 852)
                 smart_sleep(1.2, mult)
-            dev.click(540, 491)
-            if wait_edits(dev, 1, timeout=4.5 * mult) is None:
+            dev.click(540, 457)
+            if not wait_country_picker_open(dev, timeout=4.5 * mult):
                 raise FlowError("لم تظهر قائمة الجنسية بسبب بطء الاستجابة")
         smart_sleep(0.3, mult)
 
-        nat_y = smart_search_nationality(dev, raw_nat, default_nat_y, mult=mult)
-        dev.shell("input keyevent 111")
-        smart_sleep(0.4, mult)
+        select_and_confirm_nationality(dev, raw_nat, default_nat_y, mult=mult, confirm_fallback_y=1854)
 
-        dev.click(540, nat_y)
-        smart_sleep(0.4, mult)
-        dev.click(540, 1850)
-        wait_for_network_loading(dev, max_wait=8.0)
-
-        # 8. بيانات الجواز والتأشيرة
+        # 8. بيانات الجواز والتأشيرة (على نفس الشاشة الموحدة بعد العودة من قائمة الدولة)
         all_inputs = wait_edits(dev, 2, timeout=6.0 * mult)
         if all_inputs is None:
-            dev.click(540, 1850)
+            dump_retry_nat = dev.dump_hierarchy()
+            if not click_text_in_xml(dev, dump_retry_nat, ("أكد اختيارك", "أكّد اختيارك", "تأكيد الاختيار", "Confirm"), min_y=1700, max_y=1910):
+                dev.click(560, 1854)
             all_inputs = wait_edits(dev, 2, timeout=5.0 * mult)
         if all_inputs is None:
             raise FlowError("لم تظهر خانات الجواز والتأشيرة")
         smart_sleep(0.2, mult)
+        ensure_visa_radio_selected(dev, mult=mult)
+        all_inputs = wait_edits(dev, 2, timeout=3.0 * mult) or all_inputs
         all_inputs[0].set_text(passport_val)
         smart_sleep(0.15, mult)
         all_inputs[1].set_text(visa_val)
@@ -1911,8 +2176,10 @@ def _run_register(req: RegisterRequest) -> dict:
         dev.shell("input keyevent 111")
         smart_sleep(0.4, mult)
 
-        # 9. زر الحفظ النهائي وفحص النتيجة
-        dev.click(540, 1040)
+        # 9. زر الحفظ النهائي (تحقّق من حسابك: 559, 992) وفحص النتيجة
+        dump_save = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_save, ("تحقق من حسابك", "التحقق من حسابك", "Verify"), min_y=880, max_y=1150):
+            dev.click(559, 992)
         smart_sleep(1.2, mult)
         wait_for_network_loading(dev, max_wait=15.0)
 
@@ -1931,7 +2198,9 @@ def _run_register(req: RegisterRequest) -> dict:
         if outcome is None and len(dev(className="android.widget.EditText")) >= 2:
             dev.shell("input keyevent 111")
             smart_sleep(0.3, mult)
-            dev.click(540, 1040)
+            dump_save2 = dev.dump_hierarchy()
+            if not click_text_in_xml(dev, dump_save2, ("تحقق من حسابك", "التحقق من حسابك", "Verify"), min_y=880, max_y=1150):
+                dev.click(559, 992)
             smart_sleep(1.2, mult)
             wait_for_network_loading(dev, max_wait=10.0)
             for _ in range(10):
@@ -1959,8 +2228,10 @@ def _run_register(req: RegisterRequest) -> dict:
             smart_sleep(0.8, mult)
             return run_account_recovery_flow(dev, req, role, comp_num, emu_key, mult=mult)
 
-        # 10. Continue Exploring ثم سهم الرجوع للبروفايل
-        dev.click(540, 1793)
+        # 10. Continue Exploring (تابع واستكشف: 540, 1796) ثم سهم الرجوع للبروفايل (1019, 91)
+        dump_exp = dev.dump_hierarchy()
+        if not click_text_in_xml(dev, dump_exp, ("تابع واستكشف", "Continue Exploring", "استكشف"), min_y=1650, max_y=1880):
+            dev.click(540, 1796)
         smart_sleep(1.3, mult)
         wait_for_network_loading(dev, max_wait=8.0)
 
@@ -2009,13 +2280,13 @@ def _run_register(req: RegisterRequest) -> dict:
             log.info(f"المحاكي الثاني: ريفريش بالخروج ثم الدخول (محاولة {attempt + 1})...")
             dev2.click(1019, 91)
             time.sleep(1.0)
-            dev2.click(65, 101)
+            dev2.click(61, 101)
             time.sleep(2.0)
             wait_for_network_loading(dev2, max_wait=10.0)
 
             dump_dev2 = dev2.dump_hierarchy()
             if not any(m in dump_dev2 for m in ("عرض الكل", "Show All", "بطاقاتي", "My Cards")) and comp_id not in dump_dev2:
-                dev2.click(65, 101)
+                dev2.click(61, 101)
                 time.sleep(1.8)
                 wait_for_network_loading(dev2, max_wait=6.0)
                 dump_dev2 = dev2.dump_hierarchy()
