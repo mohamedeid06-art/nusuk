@@ -1137,6 +1137,72 @@ def wait_add_friend_dialog(dev, timeout: float):
     return None
 
 
+def has_pending_friend_request_card(dump_xml: str) -> bool:
+    """التحقق بدقة من وجود كرت طلب الإضافة المعلق (دون التطابق الخاطئ مع 'الخدمات والطلبات')"""
+    norm = strip_arabic_diacritics(dump_xml or "").lower()
+    return any(
+        k in norm
+        for k in ("طلب اضافة", "طلب إضافة", "friend request", "add request")
+    )
+
+
+def click_accept_friend_request(dev2, dump_xml: str = "", mult: float = 1.0) -> bool:
+    """الضغط بدقة على علامة الصح (✓) لقبول طلب الصداقة في صفحة البروفايل (المحاكي الثاني)"""
+    xml_str = dump_xml or dev2.dump_hierarchy()
+
+    # 1. لو ظهر زر نصي مباشر (قبول / Accept)
+    if click_text_in_xml(dev2, xml_str, ("قبول", "موافقة", "Accept", "Approve"), min_y=250, max_y=650):
+        return True
+
+    # 2. تحديد زر علامة الصح (✓) ديناميكياً داخل كرت "طلب إضافة" (bounds=[116,362][195,446] -> center 155, 404)
+    try:
+        root = ET.fromstring(xml_str.encode("utf-8"))
+        req_cx = None
+        req_cy = None
+        for node in root.iter():
+            t = strip_arabic_diacritics(node.attrib.get("text") or "").strip().lower()
+            if any(k in t for k in ("طلب اضافة", "طلب إضافة", "friend request", "add request")):
+                bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds") or "")
+                if bm:
+                    req_cx = (int(bm.group(1)) + int(bm.group(3))) // 2
+                    req_cy = (int(bm.group(2)) + int(bm.group(4))) // 2
+                    break
+
+        is_ltr = req_cx is not None and req_cx < 540
+        band_min = (req_cy - 60) if req_cy is not None else 320
+        band_max = (req_cy + 90) if req_cy is not None else 490
+
+        # جمع أزرار الأيقونات (✓ و ×) في نفس صف كرت الطلب (يساراً في العربية x < 320، يميناً في الإنجليزية x > 760)
+        icon_btns = []
+        for node in root.iter():
+            if node.attrib.get("class") == "android.widget.Button":
+                bm = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds") or "")
+                if not bm:
+                    continue
+                x1, y1, x2, y2 = map(int, bm.groups())
+                w, h = x2 - x1, y2 - y1
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+                in_side = (cx > 760) if is_ltr else (cx < 320)
+                if band_min <= cy <= band_max and 30 <= w <= 130 and 30 <= h <= 120 and in_side:
+                    icon_btns.append((cx, cy, x1, y1, x2, y2))
+
+        if len(icon_btns) >= 2:
+            icon_btns.sort(key=lambda b: b[0])
+            # في الواجهة العربية (RTL): × أقصى اليسار (cx≈74) و ✓ يمينه (cx≈153) -> icon_btns[-1]
+            # في الواجهة الإنجليزية (LTR): ✓ يسار × -> icon_btns[0]
+            check_btn = icon_btns[0] if is_ltr else icon_btns[-1]
+            log.info(f"المحاكي الثاني: الضغط على علامة الصح المكتشفة ({check_btn[0]}, {check_btn[1]})...")
+            dev2.click(check_btn[0], check_btn[1])
+            return True
+    except Exception:
+        pass
+
+    # 3. احتياطي بالإحداثيات الجديدة الدقيقة لعلامة الصح (155, 404) بدل القديمة (207, 408)
+    log.info("المحاكي الثاني: النقر على إحداثيات علامة الصح (155, 404)...")
+    dev2.click(155, 404)
+    return True
+
+
 def ensure_leader_on_friends_page(dev1, mult: float = 1.0) -> bool:
     """ضمان وجود المحاكي الأول داخل صفحة الأصدقاء (Show All) وإعادته إليها تلقائياً لو خرج منها لأي سبب"""
     for attempt in range(3):
@@ -1159,7 +1225,7 @@ def ensure_leader_on_friends_page(dev1, mult: float = 1.0) -> bool:
         )
         leader_id_val = (STATE.get("group") or {}).get("leader_id") or ""
         if any(m in dump1 for m in profile_markers) or (leader_id_val and leader_id_val in dump1):
-            if not click_text_in_xml(dev1, dump1, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
+            if not click_text_in_xml(dev1, dump1, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1500):
                 dev1.click(127, 1021)
             smart_sleep(1.3, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
@@ -1168,7 +1234,7 @@ def ensure_leader_on_friends_page(dev1, mult: float = 1.0) -> bool:
             smart_sleep(1.3, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
             dump_prof = dev1.dump_hierarchy()
-            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
+            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1500):
                 dev1.click(127, 1021)
             smart_sleep(1.3, mult)
         elif any(m in dump1 for m in ("التصاريح", "Permits", "أكمل", "طلباتي", "المواعيد", "لا توجد طلبات", "My Requests")):
@@ -1176,7 +1242,7 @@ def ensure_leader_on_friends_page(dev1, mult: float = 1.0) -> bool:
             smart_sleep(1.3, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
             dump_prof = dev1.dump_hierarchy()
-            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
+            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1500):
                 dev1.click(127, 1021)
             smart_sleep(1.3, mult)
         else:
@@ -1184,7 +1250,7 @@ def ensure_leader_on_friends_page(dev1, mult: float = 1.0) -> bool:
             smart_sleep(1.5, mult)
             wait_for_network_loading(dev1, max_wait=6.0)
             dump_prof = dev1.dump_hierarchy()
-            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1300):
+            if not click_text_in_xml(dev1, dump_prof, ("عرض الكل", "Show All", "Show all"), min_y=700, max_y=1500):
                 dev1.click(127, 1021)
             smart_sleep(1.3, mult)
 
@@ -1770,20 +1836,29 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
     # قبول الطلب على emu2 مع التحقق من وصول الطلب والانتظار الكافي قبل السحب
     leader_name = (STATE.get("group") or {}).get("leader_name") or ""
     dump_dev2 = ""
-    for attempt in range(2):
+    for attempt in range(3):
         dev2.click(1019, 91)
         time.sleep(1.0)
         dev2.click(61, 101)
         time.sleep(2.0)
         wait_for_network_loading(dev2, max_wait=10.0)
         dump_dev2 = dev2.dump_hierarchy()
-        if any(k in dump_dev2 for k in ("قبول", "موافقة", "Accept", "Approve", "طلب", "Request")) or (leader_name and leader_name in dump_dev2):
+        if (
+            has_pending_friend_request_card(dump_dev2)
+            or any(k in dump_dev2 for k in ("قبول", "موافقة", "Accept", "Approve"))
+            or (leader_name and leader_name in dump_dev2)
+        ):
             break
 
-    if not click_text_in_xml(dev2, dump_dev2, ("قبول", "موافقة", "Accept", "Approve"), min_y=250, max_y=650):
-        dev2.click(207, 408)
+    click_accept_friend_request(dev2, dump_dev2, mult=mult)
     time.sleep(1.5)
     wait_for_network_loading(dev2, max_wait=8.0)
+    dump_after_acc = dev2.dump_hierarchy()
+    if has_pending_friend_request_card(dump_after_acc):
+        log.warning("المحاكي الثاني: طلب الإضافة ما زال ظاهراً - إعادة النقر على علامة الصح...")
+        click_accept_friend_request(dev2, dump_after_acc, mult=mult)
+        time.sleep(1.5)
+        wait_for_network_loading(dev2, max_wait=8.0)
 
     with _state_lock:
         STATE["group"]["companions"].append({"name": pname, "id": nid})
@@ -2270,7 +2345,7 @@ def _run_register(req: RegisterRequest) -> dict:
 
         leader_name = (STATE.get("group") or {}).get("leader_name") or ""
         dump_dev2 = ""
-        for attempt in range(2):
+        for attempt in range(3):
             log.info(f"المحاكي الثاني: ريفريش بالخروج ثم الدخول (محاولة {attempt + 1})...")
             dev2.click(1019, 91)
             time.sleep(1.0)
@@ -2285,14 +2360,22 @@ def _run_register(req: RegisterRequest) -> dict:
                 wait_for_network_loading(dev2, max_wait=6.0)
                 dump_dev2 = dev2.dump_hierarchy()
 
-            if any(k in dump_dev2 for k in ("قبول", "موافقة", "Accept", "Approve", "طلب", "Request")) or (leader_name and leader_name in dump_dev2):
+            if (
+                has_pending_friend_request_card(dump_dev2)
+                or any(k in dump_dev2 for k in ("قبول", "موافقة", "Accept", "Approve"))
+                or (leader_name and leader_name in dump_dev2)
+            ):
                 break
 
-        log.info("المحاكي الثاني: النقر على علامة الصح (207, 408) لقبول الطلب...")
-        if not click_text_in_xml(dev2, dump_dev2, ("قبول", "موافقة", "Accept", "Approve"), min_y=250, max_y=650):
-            dev2.click(207, 408)
+        click_accept_friend_request(dev2, dump_dev2, mult=mult)
         time.sleep(1.5)
         wait_for_network_loading(dev2, max_wait=8.0)
+        dump_after_acc = dev2.dump_hierarchy()
+        if has_pending_friend_request_card(dump_after_acc):
+            log.warning("المحاكي الثاني: طلب الإضافة ما زال ظاهراً - إعادة النقر على علامة الصح...")
+            click_accept_friend_request(dev2, dump_after_acc, mult=mult)
+            time.sleep(1.5)
+            wait_for_network_loading(dev2, max_wait=8.0)
 
         with _state_lock:
             STATE["group"]["companions"].append({"name": comp_name, "id": comp_id})
