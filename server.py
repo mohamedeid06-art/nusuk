@@ -2440,6 +2440,8 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
             "reason": reason,
             "leader_name": pname,
             "leader_id": nid,
+            "used_email": email_val,
+            "leader_email": email_val,
             "details": details,
             "message": f"تم استرجاع الحساب واعتماده كرئيسي بنجاح ({reason})",
         }
@@ -2455,8 +2457,13 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         pass
     open_add_friend_and_send_request(dev1, nid, comp_num, mult=mult)
 
+    # حفظ بيانات الأدمن قبل أي إغلاق/تصفير للمجموعة بعد المرافق الثالث
+    with _state_lock:
+        grp_snap = dict(STATE.get("group") or {})
+    leader_name = grp_snap.get("leader_name") or ""
+    leader_id = grp_snap.get("leader_id") or ""
+
     # قبول الطلب على emu2 مع التحقق الصارم من وصول الطلب واختفاء كرته
-    leader_name = (STATE.get("group") or {}).get("leader_name") or ""
     refresh_and_accept_friend_request(dev2, nid, leader_name, mult=mult)
 
     group_count = _record_companion_in_state(pname, nid)
@@ -2477,7 +2484,11 @@ def run_account_recovery_flow(dev, req, role: str, comp_num: int, emu_key: str, 
         "reason": reason,
         "companion_name": pname,
         "companion_id": nid,
+        "leader_name": leader_name,
+        "leader_id": leader_id,
+        "companion_slot": group_count,
         "group_count": group_count,
+        "used_email": email_val,
         "details": details,
         "message": f"تم استرجاع الحساب وربطه كمرافق {comp_num} بنجاح ({reason})",
     }
@@ -2980,6 +2991,7 @@ def _run_register(req: RegisterRequest) -> dict:
             return {
                 "success": True, "status": "leader_registered", "role": "leader",
                 "leader_name": leader_name, "leader_id": leader_id,
+                "used_email": email_val, "leader_email": email_val,
                 "message": "تم تسجيل الحساب الرئيسي بنجاح",
             }
 
@@ -2994,7 +3006,11 @@ def _run_register(req: RegisterRequest) -> dict:
         dev1 = get_device(EMUS["emu1"]["serial"])
         open_add_friend_and_send_request(dev1, comp_id, comp_num, mult=mult)
 
-        leader_name = (STATE.get("group") or {}).get("leader_name") or ""
+        # حفظ بيانات الأدمن قبل أي إغلاق/تصفير للمجموعة عند اكتمال المرافق الثالث
+        with _state_lock:
+            grp_snap = dict(STATE.get("group") or {})
+        leader_name = grp_snap.get("leader_name") or ""
+        leader_id = grp_snap.get("leader_id") or ""
         refresh_and_accept_friend_request(dev2, comp_id, leader_name, mult=mult)
 
         group_count = _record_companion_in_state(comp_name, comp_id)
@@ -3011,7 +3027,9 @@ def _run_register(req: RegisterRequest) -> dict:
         return {
             "success": True, "status": "companion_linked", "role": "companion",
             "companion_name": comp_name, "companion_id": comp_id,
-            "group_count": group_count,
+            "leader_name": leader_name, "leader_id": leader_id,
+            "companion_slot": group_count, "group_count": group_count,
+            "used_email": email_val,
             "message": f"تم ربط المرافق {comp_num} وقبول الطلب بنجاح",
         }
 
