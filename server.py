@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import socket
 import subprocess
 import threading
 import time
@@ -23,6 +24,14 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
+LDPLAYER_PATH = os.getenv("LDPLAYER_PATH", r"C:\LDPlayer\LDPlayer9")
+LDCONSOLE = os.path.join(LDPLAYER_PATH, "ldconsole.exe")
+ADB_EXE = os.path.join(LDPLAYER_PATH, "adb.exe")
+
+# توحيد نسخة adb.exe بين uiautomator2/adbutils وLDPlayer لمنع تعارض البروتوكول وقتل سيرفر ADB على منفذ 5037
+if os.path.isfile(ADB_EXE) and not os.getenv("ADBUTILS_ADB_PATH"):
+    os.environ["ADBUTILS_ADB_PATH"] = ADB_EXE
 
 import uiautomator2 as u2
 from fastapi import FastAPI
@@ -40,8 +49,6 @@ SHOTS_DIR = os.path.join(BASE_DIR, "fail_shots")
 os.makedirs(SHOTS_DIR, exist_ok=True)
 MAX_SHOT_FILES = 120
 
-LDPLAYER_PATH = os.getenv("LDPLAYER_PATH", r"C:\LDPlayer\LDPlayer9")
-LDCONSOLE = os.path.join(LDPLAYER_PATH, "ldconsole.exe")
 PACKAGE_NAME = os.getenv("NUSUK_PACKAGE", "com.moh.nusukapp")
 
 EMUS = {
@@ -257,6 +264,60 @@ _devices_cache = {}
 _devices_lock = threading.RLock()
 
 
+def _resolve_adb_tcp_port(serial: str) -> Optional[int]:
+    """استنتاج منفذ ADB TCP المقابل للـ serial (مثل emulator-5594 -> 5595 و emulator-5596 -> 5597)"""
+    s = str(serial or "").strip()
+    m_tcp = re.match(r"^[^:]+:(\d+)$", s)
+    if m_tcp:
+        return int(m_tcp.group(1))
+    m_emu = re.match(r"^emulator-(\d+)$", s)
+    if m_emu:
+        return int(m_emu.group(1)) + 1
+    for emu in EMUS.values():
+        if emu.get("serial") == s:
+            try:
+                return 5555 + int(emu["index"]) * 2
+            except Exception:
+                pass
+    return None
+
+
+def _is_tcp_port_open(host: str, port: int, timeout: float = 0.6) -> bool:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        return sock.connect_ex((host, int(port))) == 0
+    except Exception:
+        return False
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def _adb_cmd(args, timeout: float = 8.0) -> str:
+    adb_bin = ADB_EXE if os.path.isfile(ADB_EXE) else "adb"
+    try:
+        res = subprocess.run(
+            [adb_bin, *args],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        return ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+    except Exception as e:
+        return f"adb_error: {e}"
+
+
+def _try_adb_tcp_connect(port: int, force_reconnect: bool = False) -> str:
+    addr = f"127.0.0.1:{port}"
+    if force_reconnect:
+        _adb_cmd(["disconnect", addr], timeout=4.0)
+    return _adb_cmd(["connect", addr], timeout=6.0)
+
+
 def get_device(serial: str, timeout: int = 120):
     with _devices_lock:
         cached = _devices_cache.get(serial)
@@ -274,8 +335,18 @@ def get_device(serial: str, timeout: int = 120):
             with _devices_lock:
                 _devices_cache.pop(serial, None)
 
+    adb_port = _resolve_adb_tcp_port(serial)
+    tcp_serial = f"127.0.0.1:{adb_port}" if adb_port else None
+
     start_t = time.time()
+    last_err = ""
+    logged_port_closed = False
+    attempt = 0
+
     while time.time() - start_t < timeout:
+        attempt += 1
+
+        # 1. المحاولة الأساسية بالـ serial الأصلي (مثل emulator-5596) بدون فتح سوكيت إضافي لو المحاكي متصل بالفعل
         try:
             dev = u2.connect(serial)
             info = dev.info
@@ -288,10 +359,50 @@ def get_device(serial: str, timeout: int = 120):
                 with _devices_lock:
                     _devices_cache[serial] = dev
                 return dev
-        except Exception:
-            pass
+        except Exception as e:
+            err_txt = f"{type(e).__name__}: {e}"
+            if err_txt != last_err:
+                log.warning(f"[ADB] تعذر الاتصال بـ {serial}: {err_txt}")
+                last_err = err_txt
+
+        # 2. عند فشل الـ serial الأصلي فقط: نفحص هل منفذ ADB TCP مفتوح ونحاول الربط المباشر 127.0.0.1:<port>
+        if adb_port:
+            if not _is_tcp_port_open("127.0.0.1", adb_port):
+                last_err = f"منفذ ADB ({adb_port}) غير مفتوح على 127.0.0.1 — أعد تشغيل المحاكي وتأكد من تفعيل ADB Debugging"
+                if not logged_port_closed:
+                    log.warning(f"[ADB] {serial}: {last_err}")
+                    logged_port_closed = True
+                if timeout <= 8:
+                    break
+                time.sleep(1.5)
+                continue
+
+            logged_port_closed = False
+            _try_adb_tcp_connect(adb_port, force_reconnect=(attempt > 2 and attempt % 3 == 0))
+            if tcp_serial and tcp_serial != serial:
+                try:
+                    dev = u2.connect(tcp_serial)
+                    info = dev.info
+                    if info.get("screenOn") is False:
+                        try:
+                            dev.screen_on()
+                        except Exception:
+                            pass
+                    if info.get("screenOn") is not None:
+                        with _devices_lock:
+                            _devices_cache[serial] = dev
+                        log.info(f"[ADB] تم الاتصال بالمحاكي {serial} عبر المنفذ المباشر {tcp_serial} ✓")
+                        return dev
+                except Exception as e:
+                    err_txt = f"{type(e).__name__}: {e}"
+                    if err_txt != last_err:
+                        log.warning(f"[ADB] فشل الاتصال المباشر بـ {tcp_serial}: {err_txt}")
+                        last_err = err_txt
+
         time.sleep(1.5)
-    raise RuntimeError(f"تعذر الاتصال بالمحاكي {serial}")
+
+    detail = f" ({last_err})" if last_err else ""
+    raise RuntimeError(f"تعذر الاتصال بالمحاكي {serial}{detail}")
 
 
 def smart_sleep(base_seconds: float, mult: float = 1.0):
@@ -2568,15 +2679,21 @@ def set_speed_api(multiplier: float = 1.0):
 @app.get("/api/health")
 def health_check():
     busy = OP_LOCK.locked()
-    result = {"busy": busy, "emulators": {}}
+    result = {
+        "busy": busy,
+        "adb_binary": os.environ.get("ADBUTILS_ADB_PATH") or (ADB_EXE if os.path.isfile(ADB_EXE) else "adb"),
+        "emulators": {},
+    }
     all_ok = True
     for key, emu in EMUS.items():
         with _state_lock:
             h = dict(STATE["health"][key])
             counter = STATE["counters"][key]
+        adb_port = _resolve_adb_tcp_port(emu["serial"])
         item = {
-            "label": emu["label"], "serial": emu["serial"], "counter": counter,
-            "healthy": h["ok"], "reason": h["reason"], "connected": None,
+            "label": emu["label"], "serial": emu["serial"], "index": emu["index"],
+            "adb_port": adb_port,
+            "counter": counter, "healthy": h["ok"], "reason": h["reason"], "connected": None,
         }
         if busy:
             item["note"] = "عملية شغالة - تم تخطي فحص الجهاز"
@@ -2586,11 +2703,15 @@ def health_check():
                 w, hgt = dev.window_size()
                 pkg = dev.app_current().get("package")
                 item.update({
-                    "connected": True, "screen": f"{w}x{hgt}",
+                    "connected": True,
+                    "adb_port_open": True,
+                    "connected_serial": getattr(dev, "serial", emu["serial"]),
+                    "screen": f"{w}x{hgt}",
                     "foreground_app": pkg, "nusuk_in_foreground": pkg == PACKAGE_NAME,
                 })
             except Exception as e:
-                item.update({"connected": False, "error": str(e)})
+                port_open = _is_tcp_port_open("127.0.0.1", adb_port) if adb_port else None
+                item.update({"connected": False, "adb_port_open": port_open, "error": str(e)})
         if not h["ok"] or item["connected"] is False:
             all_ok = False
         result["emulators"][key] = item
