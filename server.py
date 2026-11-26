@@ -25,8 +25,84 @@ try:
 except ImportError:
     pass
 
-LDPLAYER_PATH = os.getenv("LDPLAYER_PATH", r"C:\LDPlayer\LDPlayer9")
-LDCONSOLE = os.path.join(LDPLAYER_PATH, "ldconsole.exe")
+def _find_console_exe(folder: str) -> Optional[str]:
+    if not folder:
+        return None
+    folder = folder.strip().strip('"')
+    for exe_name in ("ldconsole.exe", "dnconsole.exe"):
+        candidate = os.path.join(folder, exe_name)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _discover_ldplayer_dir() -> str:
+    """اكتشاف مسار تثبيت LDPlayer تلقائياً على أي جهاز ويندوز (متغير البيئة، الريجستري، أو الأقراص C..Z)"""
+    env_dir = os.getenv("LDPLAYER_PATH", "").strip().strip('"')
+    if env_dir and _find_console_exe(env_dir):
+        return env_dir
+
+    # 1. البحث في Windows Registry (أدق وأسرع طريقة مهما كان مكان التثبيت)
+    if os.name == "nt":
+        try:
+            import winreg
+            reg_roots = [winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE]
+            reg_subkeys = [
+                r"Software\XuanZhi\LDPlayer9",
+                r"Software\XuanZhi\LDPlayer64",
+                r"Software\XuanZhi\LDPlayer",
+                r"Software\LDPlayer\LDPlayer9",
+                r"Software\WOW6432Node\XuanZhi\LDPlayer9",
+                r"Software\WOW6432Node\XuanZhi\LDPlayer",
+            ]
+            for root in reg_roots:
+                for sub in reg_subkeys:
+                    try:
+                        with winreg.OpenKey(root, sub) as k:
+                            install_dir, _ = winreg.QueryValueEx(k, "InstallDir")
+                            if install_dir and _find_console_exe(str(install_dir)):
+                                return str(install_dir).rstrip("\\/")
+                    except OSError:
+                        continue
+        except Exception:
+            pass
+
+    # 2. البحث في PATH النظام
+    import shutil
+    for exe_name in ("ldconsole.exe", "dnconsole.exe"):
+        found = shutil.which(exe_name)
+        if found and os.path.isfile(found):
+            return os.path.dirname(os.path.abspath(found))
+
+    # 3. فحص المسارات الشائعة على كل البارتيشنات الموجودة (C:, D:, E:, ...)
+    rel_dirs = (
+        r"LDPlayer\LDPlayer9",
+        r"LDPlayer9",
+        r"LDPlayer\LDPlayer4.0",
+        r"LDPlayer\LDPlayer64",
+        r"LDPlayer\LDPlayer3.0",
+        r"LDPlayer",
+        r"XuanZhi\LDPlayer9",
+        r"XuanZhi\LDPlayer",
+        r"XuanZhi\LDPlayer64",
+        r"Program Files\LDPlayer\LDPlayer9",
+        r"Program Files\LDPlayer9",
+        r"Program Files (x86)\LDPlayer\LDPlayer9",
+    )
+    for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+        drive = f"{letter}:\\"
+        if not os.path.exists(drive):
+            continue
+        for rel in rel_dirs:
+            cand_dir = os.path.join(drive, rel)
+            if _find_console_exe(cand_dir):
+                return cand_dir
+
+    return env_dir or r"C:\LDPlayer\LDPlayer9"
+
+
+LDPLAYER_PATH = _discover_ldplayer_dir()
+LDCONSOLE = _find_console_exe(LDPLAYER_PATH) or os.path.join(LDPLAYER_PATH, "ldconsole.exe")
 ADB_EXE = os.path.join(LDPLAYER_PATH, "adb.exe")
 
 # توحيد نسخة adb.exe بين uiautomator2/adbutils وLDPlayer لمنع تعارض البروتوكول وقتل سيرفر ADB على منفذ 5037
@@ -943,6 +1019,19 @@ def restart_and_randomize_ldplayer(emu_key: str) -> bool:
 
     with _devices_lock:
         _devices_cache.pop(emu_serial, None)
+
+    global LDPLAYER_PATH, LDCONSOLE, ADB_EXE
+    if not os.path.isfile(LDCONSOLE):
+        LDPLAYER_PATH = _discover_ldplayer_dir()
+        LDCONSOLE = _find_console_exe(LDPLAYER_PATH) or os.path.join(LDPLAYER_PATH, "ldconsole.exe")
+        ADB_EXE = os.path.join(LDPLAYER_PATH, "adb.exe")
+    if not os.path.isfile(LDCONSOLE):
+        log.error(
+            f"[X] لم يتم العثور على ملف ldconsole.exe في المسار ({LDCONSOLE})! "
+            f"حدد مسار مجلد LDPlayer الصحيح في متغير البيئة LDPLAYER_PATH."
+        )
+        set_health(emu_key, False, "ldconsole_not_found")
+        return False
 
     try:
         subprocess.run(
@@ -2681,6 +2770,8 @@ def health_check():
     busy = OP_LOCK.locked()
     result = {
         "busy": busy,
+        "ldplayer_path": LDPLAYER_PATH,
+        "ldconsole_exists": os.path.isfile(LDCONSOLE),
         "adb_binary": os.environ.get("ADBUTILS_ADB_PATH") or (ADB_EXE if os.path.isfile(ADB_EXE) else "adb"),
         "emulators": {},
     }
@@ -2752,6 +2843,11 @@ def randomize_emulator_api(emu_key: str):
                 STATE["counters"][emu_key] = 0
             save_state()
             return {"success": True, "message": f"تم تغيير بصمة {label} وإعادة تشغيله بنجاح"}
+        if not os.path.isfile(LDCONSOLE):
+            return {
+                "success": False,
+                "message": f"تعذر العثور على ldconsole.exe في ({LDPLAYER_PATH}) — تأكد من مسار تثبيت LDPlayer",
+            }
         return {"success": False, "message": f"حدث خطأ أثناء إعادة تشغيل {label}"}
 
 
